@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../lib/useAuth.js';
+import GuestShowroom from './GuestShowroom.jsx';
 
 function RoleChoice({ onSelect }) {
   return (
@@ -112,19 +113,7 @@ function AuthCard({ role, onBack }) {
 }
 
 function GuestLanding() {
-  const { signOut } = useAuth();
-  return (
-    <div className="access-shell">
-      <div className="access-card access-ready-card">
-        <div className="access-auth-badge guest">👤</div>
-        <p className="access-eyebrow">Guest account</p>
-        <h1>Welcome to the Showroom</h1>
-        <p className="access-subtitle">Your guest account is ready. The showroom product experience will be added here.</p>
-        <div className="access-ready-note">Guest access is intentionally separated from the internal Article Ledger.</div>
-        <button className="access-submit" onClick={signOut}>Sign out</button>
-      </div>
-    </div>
-  );
+  return <GuestShowroom />;
 }
 
 export default function AccessGate({ children }) {

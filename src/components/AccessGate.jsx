@@ -63,8 +63,18 @@ function AuthCard({ role, onBack }) {
         full_name: name.trim(),
         employee_id: isEmployee ? employeeId.trim() : '',
       });
-      if (result.error) setError(result.error.message || 'Could not create account.');
-      else if (!result.session) setMessage('Account created. Check your email to confirm your account, then sign in.');
+      if (result.error) {
+        setError(result.error.message || 'Could not create account.');
+      } else if (result.session) {
+        // With Supabase Confirm Email disabled, signUp returns an active session.
+        // The auth listener in useAuth() will immediately pass the user through.
+        setMessage('Account created. Signing you in…');
+      } else {
+        // This normally means Supabase Confirm Email is still enabled. Do not
+        // instruct the user to check email because this app is configured for
+        // immediate access after signup.
+        setError('Account created, but immediate sign-in is unavailable. Disable Confirm Email in Supabase Authentication settings.');
+      }
     }
     setBusy(false);
   }

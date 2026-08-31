@@ -11,6 +11,7 @@ import Garments from './components/Garments.jsx';
 import GarmentForm from './components/GarmentForm.jsx';
 import Calculator from './components/Calculator.jsx';
 import DataQualityCenter from './components/DataQualityCenter.jsx';
+import UserManagement from './components/UserManagement.jsx';
 import AccessGate from './components/AccessGate.jsx';
 
 const BrandIconSVG = () => (
@@ -56,7 +57,7 @@ function ScrollToTopButton() {
 }
 
 function AppInner() {
-  const { isAuthed, signIn, signOut } = useAuth();
+  const { isAuthed, signIn, signOut, profile, permissions, role } = useAuth();
   const { showToast } = useToast();
   const dialogs = useDialogs();
 
@@ -71,6 +72,7 @@ function AppInner() {
   const [pendingAction, setPendingAction] = useState(null);
   const [showCalculator, setShowCalculator] = useState(false);
   const [showDataQuality, setShowDataQuality] = useState(false);
+  const [showUserManagement, setShowUserManagement] = useState(false);
 
   const [garments, setGarments] = useState([]);
   const [garmentsLoading, setGarmentsLoading] = useState(true);
@@ -195,6 +197,7 @@ function AppInner() {
   }
 
   function openAddChoice() {
+    if (!permissions.canAdd) return showToast('Your account does not have permission to add products', 'error');
     requireAuth(() => {
       dialogs.choiceDialog({
         title: 'What would you like to add?',
@@ -208,10 +211,12 @@ function AppInner() {
   }
 
   function openEditForm(product) {
+    if (!permissions.canEdit) return showToast('Your account does not have permission to edit articles', 'error');
     requireAuth(() => { setEditingProduct(product); navigate('add-product'); });
   }
 
   function deleteProduct(product) {
+    if (!permissions.canDelete) return showToast('Your account does not have permission to delete articles', 'error');
     requireAuth(() => {
       dialogs.confirmDialog({
         title: 'Delete this article?',
@@ -240,10 +245,12 @@ function AppInner() {
   }
 
   function openEditGarment(group) {
+    if (!permissions.canEdit) return showToast('Your account does not have permission to edit garments', 'error');
     requireAuth(() => { setEditingGarmentGroup(group); navigate('add-garment'); });
   }
 
   function deleteGarment(group) {
+    if (!permissions.canDelete) return showToast('Your account does not have permission to delete garments', 'error');
     requireAuth(() => {
       dialogs.confirmDialog({
         title: 'Delete this garment style?',
@@ -284,7 +291,7 @@ function AppInner() {
             </div>
           </button>
           <div className="header-actions">
-            <button
+            {permissions.canDataQuality && <button
               type="button"
               className="header-tool-btn"
               onClick={() => setShowDataQuality(true)}
@@ -293,10 +300,13 @@ function AppInner() {
             >
               <span aria-hidden="true">✓</span>
               <span>Data Quality</span>
-            </button>
+            </button>}
+            {permissions.canManageUsers && <button type="button" className="header-tool-btn" onClick={() => setShowUserManagement(true)} title="Manage users">
+              <span aria-hidden="true">♙</span><span>Users</span>
+            </button>}
             {isAuthed ? (
               <>
-                <span className="who">Signed in</span>
+                <span className="who">Signed in · {role === 'super_admin' ? 'Super Admin' : role === 'admin' ? 'Admin' : role === 'editor' ? 'Editor' : 'Viewer'}</span>
                 <button className="btn" onClick={signOut}>Sign out</button>
               </>
             ) : (
@@ -308,7 +318,7 @@ function AppInner() {
           <button className={view === 'home' ? 'active' : ''} onClick={goHome}>🏠 Home</button>
           <button className={view === 'catalog' ? 'active' : ''} onClick={() => { setCatalogFilters(null); navigate('catalog'); }}>General</button>
           <button className={view === 'garments' ? 'active' : ''} onClick={() => { setGarmentFilters(null); navigate('garments'); }}>Garments</button>
-          <button className={(view === 'add-product' || view === 'add-garment') ? 'active' : ''} onClick={openAddChoice}>+ Add Product</button>
+          {permissions.canAdd && <button className={(view === 'add-product' || view === 'add-garment') ? 'active' : ''} onClick={openAddChoice}>+ Add Product</button>}
         </nav>
       </header>
 
@@ -341,9 +351,11 @@ function AppInner() {
             <Catalog
               products={products}
               initialFilters={catalogFilters}
-              onEdit={openEditForm}
-              onDelete={deleteProduct}
+              onEdit={permissions.canEdit ? openEditForm : undefined}
+              onDelete={permissions.canDelete ? deleteProduct : undefined}
               isAuthed={isAuthed}
+              canEdit={permissions.canEdit}
+              canDelete={permissions.canDelete}
             />
           </div>
           <div style={{ display: view === 'add-product' ? 'block' : 'none' }}>
@@ -373,7 +385,7 @@ function AppInner() {
               </div>
             )}
             {garmentsHasLoadedOnce && (
-              <Garments garments={garments} initialFilters={garmentFilters} onEdit={openEditGarment} onDelete={deleteGarment} />
+              <Garments garments={garments} initialFilters={garmentFilters} onEdit={permissions.canEdit ? openEditGarment : undefined} onDelete={permissions.canDelete ? deleteGarment : undefined} />
             )}
           </div>
           <div style={{ display: view === 'add-garment' ? 'block' : 'none' }}>
@@ -413,6 +425,12 @@ function AppInner() {
       </div>
 
       <Calculator open={showCalculator} onClose={() => setShowCalculator(false)} />
+
+      <UserManagement
+        open={showUserManagement}
+        onClose={() => setShowUserManagement(false)}
+        currentProfile={profile}
+      />
 
       <DataQualityCenter
         open={showDataQuality}

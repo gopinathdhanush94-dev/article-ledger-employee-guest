@@ -59,22 +59,12 @@ function AuthCard({ role, onBack }) {
       if (err) setError(err.message || 'Sign-in failed.');
     } else {
       const result = await signUp(email.trim(), password, {
-        role: isEmployee ? 'employee' : 'guest',
+        account_type: isEmployee ? 'employee' : 'guest',
         full_name: name.trim(),
         employee_id: isEmployee ? employeeId.trim() : '',
       });
-      if (result.error) {
-        setError(result.error.message || 'Could not create account.');
-      } else if (result.session) {
-        // With Supabase Confirm Email disabled, signUp returns an active session.
-        // The auth listener in useAuth() will immediately pass the user through.
-        setMessage('Account created. Signing you in…');
-      } else {
-        // This normally means Supabase Confirm Email is still enabled. Do not
-        // instruct the user to check email because this app is configured for
-        // immediate access after signup.
-        setError('Account created, but immediate sign-in is unavailable. Disable Confirm Email in Supabase Authentication settings.');
-      }
+      if (result.error) setError(result.error.message || 'Could not create account.');
+      else if (!result.session) setMessage('Account created. You can sign in now.');
     }
     setBusy(false);
   }
@@ -138,7 +128,7 @@ function GuestLanding() {
 }
 
 export default function AccessGate({ children }) {
-  const { session, loading } = useAuth();
+  const { session, profile, loading, isGuest, isEmployee, isPending, isDisabled, signOut } = useAuth();
   const [role, setRole] = useState(null);
 
   if (loading) {
@@ -150,7 +140,40 @@ export default function AccessGate({ children }) {
     return <AuthCard role={role} onBack={() => setRole(null)} />;
   }
 
-  const accountRole = session.user?.user_metadata?.role || 'employee';
-  if (accountRole === 'guest') return <GuestLanding />;
+  if (!profile) {
+    return <div className="access-shell"><div className="access-card"><p className="access-error">Your account profile is not ready yet. Please contact an administrator.</p><button className="access-submit" onClick={signOut}>Sign out</button></div></div>;
+  }
+
+  if (isGuest) return <GuestLanding />;
+
+  if (isEmployee && isPending) {
+    return (
+      <div className="access-shell">
+        <div className="access-card access-ready-card">
+          <div className="access-auth-badge employee">👨‍💼</div>
+          <p className="access-eyebrow">Employee account</p>
+          <h1>Awaiting approval</h1>
+          <p className="access-subtitle">Your employee account was created as Viewer/Pending. An administrator must activate it before internal Article Ledger data becomes available.</p>
+          <div className="access-ready-note"><strong>{profile.full_name || profile.email}</strong><br/>Employee ID: {profile.employee_id || 'Not provided'}</div>
+          <button className="access-submit" onClick={signOut}>Sign out</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isEmployee && isDisabled) {
+    return (
+      <div className="access-shell">
+        <div className="access-card access-ready-card">
+          <div className="access-auth-badge employee">⛔</div>
+          <p className="access-eyebrow">Employee account</p>
+          <h1>Account disabled</h1>
+          <p className="access-subtitle">This employee account is currently disabled. Please contact an administrator.</p>
+          <button className="access-submit" onClick={signOut}>Sign out</button>
+        </div>
+      </div>
+    );
+  }
+
   return children;
 }

@@ -325,8 +325,8 @@ function GarmentModal({ garment: g, onClose, onEdit, onDelete, onPrev, onNext })
               </table>
             </div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <button className="btn" onClick={onEdit}>✎ Edit</button>
-              <button className="btn btn-danger" onClick={onDelete}>🗑 Delete</button>
+              {onEdit && <button className="btn" onClick={onEdit}>✎ Edit</button>}
+              {onDelete && <button className="btn btn-danger" onClick={onDelete}>🗑 Delete</button>}
             </div>
           </div>
         </div>

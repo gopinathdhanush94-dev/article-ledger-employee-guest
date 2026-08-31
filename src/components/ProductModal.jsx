@@ -247,9 +247,9 @@ export default function ProductModal({ product: p, isAuthed, onClose, onEdit, on
               </div>
 
               <footer className="pd-actions">
-                <button className="btn btn-primary" onClick={onEdit}>✎&nbsp; Edit Article</button>
-                <button className="btn btn-secondary" onClick={() => setShowHistory(v => !v)}>◷&nbsp; History {history.length > 0 && <span>({history.length})</span>}</button>
-                <button className="btn btn-danger" onClick={onDelete}>♲&nbsp; Delete</button>
+                {onEdit && <button className="btn btn-primary" onClick={onEdit}>✎&nbsp; Edit Article</button>}
+                {isAuthed && <button className="btn btn-secondary" onClick={() => setShowHistory(v => !v)}>◷&nbsp; History {history.length > 0 && <span>({history.length})</span>}</button>}
+                {onDelete && <button className="btn btn-danger" onClick={onDelete}>♲&nbsp; Delete</button>}
               </footer>
 
               {showHistory && (

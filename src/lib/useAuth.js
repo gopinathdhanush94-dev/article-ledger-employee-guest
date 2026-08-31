@@ -1,20 +1,67 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../supabaseClient.js';
+
+const ROLE_PERMISSIONS = {
+  super_admin: { canView: true, canAdd: true, canEdit: true, canDelete: true, canHistory: true, canDataQuality: true, canManageUsers: true },
+  admin:       { canView: true, canAdd: true, canEdit: true, canDelete: true, canHistory: true, canDataQuality: true, canManageUsers: true },
+  editor:      { canView: true, canAdd: true, canEdit: true, canDelete: false, canHistory: true, canDataQuality: true, canManageUsers: false },
+  viewer:      { canView: true, canAdd: false, canEdit: false, canDelete: false, canHistory: true, canDataQuality: false, canManageUsers: false },
+  guest:       { canView: false, canAdd: false, canEdit: false, canDelete: false, canHistory: false, canDataQuality: false, canManageUsers: false },
+};
+
+const DEFAULT_PERMISSIONS = ROLE_PERMISSIONS.viewer;
 
 export function useAuth() {
   const [session, setSession] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const loadProfile = useCallback(async (userId) => {
+    if (!userId) {
+      setProfile(null);
+      return null;
+    }
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('user_id, full_name, email, employee_id, account_type, role, status, created_at, updated_at')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error) {
+      console.error('Could not load account profile:', error);
+      setProfile(null);
+      return null;
+    }
+    setProfile(data || null);
+    return data || null;
+  }, []);
+
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
+    let mounted = true;
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!mounted) return;
+      const sess = data.session || null;
+      setSession(sess);
+      if (sess?.user?.id) await loadProfile(sess.user.id);
+      else setProfile(null);
+      if (mounted) setLoading(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, sess) => {
+      setSession(sess || null);
+      if (sess?.user?.id) {
+        // Don't block the auth callback on a database query.
+        Promise.resolve().then(() => loadProfile(sess.user.id));
+      } else {
+        setProfile(null);
+      }
       setLoading(false);
     });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, sess) => {
-      setSession(sess);
-    });
-    return () => listener.subscription.unsubscribe();
-  }, []);
+
+    return () => {
+      mounted = false;
+      listener.subscription.unsubscribe();
+    };
+  }, [loadProfile]);
 
   async function signIn(email, password) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -33,5 +80,31 @@ export function useAuth() {
     await supabase.auth.signOut();
   }
 
-  return { session, loading, signIn, signUp, signOut, isAuthed: !!session };
+  const role = profile?.role || (profile?.account_type === 'guest' ? 'guest' : 'viewer');
+  const permissions = useMemo(() => ROLE_PERMISSIONS[role] || DEFAULT_PERMISSIONS, [role]);
+  const isEmployee = profile?.account_type === 'employee';
+  const isGuest = profile?.account_type === 'guest';
+  const isActive = profile?.status === 'active';
+  const isPending = profile?.status === 'pending';
+  const isDisabled = profile?.status === 'disabled';
+
+  return {
+    session,
+    profile,
+    role,
+    permissions,
+    loading,
+    signIn,
+    signUp,
+    signOut,
+    refreshProfile: () => loadProfile(session?.user?.id),
+    isAuthed: !!session,
+    isEmployee,
+    isGuest,
+    isActive,
+    isPending,
+    isDisabled,
+  };
 }
+
+export { ROLE_PERMISSIONS };

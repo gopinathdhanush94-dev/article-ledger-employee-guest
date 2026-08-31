@@ -11,6 +11,7 @@ import Garments from './components/Garments.jsx';
 import GarmentForm from './components/GarmentForm.jsx';
 import Calculator from './components/Calculator.jsx';
 import DataQualityCenter from './components/DataQualityCenter.jsx';
+import AccessGate from './components/AccessGate.jsx';
 
 const BrandIconSVG = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -434,7 +435,9 @@ export default function App() {
   return (
     <DialogProvider>
       <ToastProvider>
-        <AppInner />
+        <AccessGate>
+          <AppInner />
+        </AccessGate>
       </ToastProvider>
     </DialogProvider>
   );

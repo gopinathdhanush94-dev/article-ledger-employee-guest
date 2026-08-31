@@ -21,9 +21,17 @@ export function useAuth() {
     return error;
   }
 
+  async function signUp(email, password, metadata = {}) {
+    return await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: metadata },
+    });
+  }
+
   async function signOut() {
     await supabase.auth.signOut();
   }
 
-  return { session, loading, signIn, signOut, isAuthed: !!session };
+  return { session, loading, signIn, signUp, signOut, isAuthed: !!session };
 }

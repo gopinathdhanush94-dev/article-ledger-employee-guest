@@ -36,6 +36,28 @@ function CartIcon() {
 
 function ShowroomHeader({ search, setSearch, onScan, onSignOut, favouriteCount = 0, cartCount = 0, onFavourites, onCart }) {
   const [guestMenuOpen, setGuestMenuOpen] = useState(false);
+
+  // Close the Guest menu whenever the user clicks/taps anywhere outside it.
+  // A document-level listener is used instead of a transparent backdrop so
+  // clicks on the showroom content are never blocked by the menu layer.
+  useEffect(() => {
+    if (!guestMenuOpen) return undefined;
+    const handlePointerDown = (event) => {
+      if (!event.target.closest('.showroom-guest-menu-wrap')) {
+        setGuestMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setGuestMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true);
+      document.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [guestMenuOpen]);
+
   return (
     <header className="showroom-header">
       <div className="showroom-brand-lockup">
@@ -62,7 +84,6 @@ function ShowroomHeader({ search, setSearch, onScan, onSignOut, favouriteCount =
         <div className="showroom-guest-menu-wrap">
           <button className="showroom-guest-btn" type="button" onClick={() => setGuestMenuOpen(open => !open)} aria-haspopup="menu" aria-expanded={guestMenuOpen}>Guest <span className="showroom-guest-chevron">⌄</span></button>
           {guestMenuOpen && <>
-            <button className="showroom-guest-menu-backdrop" type="button" aria-label="Close guest menu" onClick={() => setGuestMenuOpen(false)} />
             <div className="showroom-guest-menu" role="menu">
               <button type="button" role="menuitem" onClick={() => { setGuestMenuOpen(false); onSignOut(); }}>Sign out</button>
             </div>

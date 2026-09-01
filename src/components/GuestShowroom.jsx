@@ -96,6 +96,25 @@ function getGallery(item) {
   return [...new Set(candidates.filter(Boolean).map(String))];
 }
 
+function formatNumber(value) {
+  if (value === null || value === undefined || value === '') return '';
+  const n = Number(value);
+  return Number.isFinite(n) ? String(n) : String(value);
+}
+
+function skuDimensions(item) {
+  const values = [item?.sku_l, item?.sku_w, item?.sku_h];
+  if (!values.some(v => v !== null && v !== undefined && v !== '')) return '';
+  const unit = item?.sku_dim_unit ? ` ${item.sku_dim_unit}` : '';
+  return `${values.map(v => formatNumber(v) || '—').join(' × ')}${unit}`;
+}
+
+function skuWeight(item, net = true) {
+  const value = net ? item?.sku_nw : item?.sku_gw;
+  if (value === null || value === undefined || value === '') return '';
+  return `${formatNumber(value)}${item?.sku_wt_unit ? ` ${item.sku_wt_unit}` : ''}`;
+}
+
 function ProductDetail({ item, onBack, onScanAnother, isFavourite, inCart, onToggleFavourite, onToggleCart }) {
   const gallery = getGallery(item);
   const [imageOpen, setImageOpen] = useState(false);
@@ -158,6 +177,18 @@ function ProductDetail({ item, onBack, onScanAnother, isFavourite, inCart, onTog
           <h1>{displayName(item)}</h1>
           <p className="showroom-detail-subtitle">{item.model || 'Product details'}</p>
 
+          <div className="showroom-detail-top-actions">
+            <button type="button" className={`showroom-detail-icon-btn ${isFavourite ? 'active' : ''}`} onClick={() => onToggleFavourite(item)} aria-label={isFavourite ? 'Remove from favourites' : 'Add to favourites'} title={isFavourite ? 'Remove from favourites' : 'Add to favourites'}>
+              <HeartIcon filled={isFavourite} />
+            </button>
+            <button type="button" className={`showroom-detail-icon-btn ${inCart ? 'active' : ''}`} onClick={() => onToggleCart(item)} aria-label={inCart ? 'Remove from cart' : 'Add to cart'} title={inCart ? 'Remove from cart' : 'Add to cart'}>
+              <CartIcon />
+            </button>
+            <button type="button" className="showroom-detail-icon-btn" onClick={onScanAnother} aria-label="Scan another product" title="Scan another product">
+              <QrIcon />
+            </button>
+          </div>
+
           <section className="showroom-section showroom-sku-section">
             <div className="showroom-section-title">SKU details</div>
             <div className="showroom-sku-grid">
@@ -165,13 +196,16 @@ function ProductDetail({ item, onBack, onScanAnother, isFavourite, inCart, onTog
                 ['EAN', item.ean],
                 ['Model', item.model],
                 ['Category', item.category],
+                ['L × B × H', skuDimensions(item)],
+                ['Net weight', skuWeight(item, true)],
+                ['Gross weight', skuWeight(item, false)],
               ].map(([label, value]) => (
                 <div className="showroom-sku-item" key={label}><span>{label}</span><strong>{value || '—'}</strong></div>
               ))}
             </div>
           </section>
 
-          {item.dimensions && (
+          {item.dimensions && !skuDimensions(item) && (
             <section className="showroom-section">
               <div className="showroom-section-title">Dimensions</div>
               <p className="showroom-description">{item.dimensions}</p>
@@ -186,12 +220,6 @@ function ProductDetail({ item, onBack, onScanAnother, isFavourite, inCart, onTog
             </section>
           )}
 
-          <div className="showroom-detail-actions">
-            <button type="button" className={`showroom-secondary-btn showroom-favourite-btn ${isFavourite ? 'active' : ''}`} onClick={() => onToggleFavourite(item)}><HeartIcon filled={isFavourite} /> {isFavourite ? 'Favourited' : 'Favourite'}</button>
-            <button type="button" className={`showroom-secondary-btn showroom-cart-btn ${inCart ? 'active' : ''}`} onClick={() => onToggleCart(item)}><CartIcon /> {inCart ? 'In cart' : 'Add to cart'}</button>
-            <button type="button" className="showroom-secondary-btn" onClick={onScanAnother}><QrIcon /> Scan another product</button>
-            <button type="button" className="showroom-primary-btn" onClick={onBack}>Back to showroom <ArrowIcon /></button>
-          </div>
         </div>
       </div>
 
@@ -247,7 +275,7 @@ export default function GuestShowroom() {
     setLoading(true);
     const { data, error: err } = await supabase
       .from('showroom_items')
-      .select('id,source_type,ean,article_no,name,brand,model,category,description,image_url,features,dimensions,featured,visible')
+      .select('id,source_type,ean,article_no,name,brand,model,category,description,image_url,features,dimensions,sku_l,sku_w,sku_h,sku_dim_unit,sku_nw,sku_gw,sku_wt_unit,featured,visible')
       .eq('visible', true)
       .order('featured', { ascending: false })
       .order('created_at', { ascending: false });

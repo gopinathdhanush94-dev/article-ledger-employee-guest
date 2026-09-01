@@ -15,6 +15,13 @@ create table if not exists public.showroom_items (
   image_url text,
   features jsonb not null default '[]'::jsonb,
   dimensions text,
+  sku_l numeric,
+  sku_w numeric,
+  sku_h numeric,
+  sku_dim_unit text,
+  sku_nw numeric,
+  sku_gw numeric,
+  sku_wt_unit text,
   featured boolean not null default false,
   visible boolean not null default false,
   created_at timestamptz not null default now(),
@@ -73,7 +80,9 @@ using (public.has_any_app_role(array['admin','super_admin']) and public.is_activ
 -- carton weights/costs, history and internal metadata are deliberately excluded.
 insert into public.showroom_items (
   source_type, source_id, ean, article_no, name, brand, model, category,
-  description, image_url, features, dimensions, featured, visible
+  description, image_url, features, dimensions,
+  sku_l, sku_w, sku_h, sku_dim_unit, sku_nw, sku_gw, sku_wt_unit,
+  featured, visible
 )
 select
   'product', p.id, p.ean, p.article_no,
@@ -85,6 +94,7 @@ select
     when p.sku_l is not null and p.sku_w is not null and p.sku_h is not null
       then concat(p.sku_l, ' × ', p.sku_w, ' × ', p.sku_h, coalesce(' ' || nullif(p.sku_dim_unit,''), ''))
     else null end,
+  p.sku_l, p.sku_w, p.sku_h, p.sku_dim_unit, p.sku_nw, p.sku_gw, p.sku_wt_unit,
   false, false
 from public.products p
 where not exists (
@@ -95,7 +105,9 @@ where not exists (
 -- Initial safe showroom seed from Garments.
 insert into public.showroom_items (
   source_type, source_id, ean, article_no, name, brand, model, category,
-  description, image_url, features, dimensions, featured, visible
+  description, image_url, features, dimensions,
+  sku_l, sku_w, sku_h, sku_dim_unit, sku_nw, sku_gw, sku_wt_unit,
+  featured, visible
 )
 select distinct on (g.customer_model, g.color)
   'garment', g.id, g.ean, g.article,
@@ -104,7 +116,8 @@ select distinct on (g.customer_model, g.color)
   coalesce(g.customer_model, g.model_name, g.model1),
   'Garments',
   g.description, g.image_url,
-  '[]'::jsonb, null, false, false
+  '[]'::jsonb, null, null, null, null, null, null, null, null,
+  false, false
 from public.garments g
 where not exists (
   select 1 from public.showroom_items s

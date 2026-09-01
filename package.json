@@ -18,7 +18,8 @@
     "restore-products-backup": "node scripts/restore_products_backup.mjs",
     "sync-artical-all": "node scripts/sync_artical_all.mjs",
     "reconcile-artical-all": "node scripts/reconcile_artical_all.mjs",
-    "normalize-months": "node scripts/normalize_existing_months.mjs"
+    "normalize-months": "node scripts/normalize_existing_months.mjs",
+    "sync-showroom-sku": "node scripts/sync_showroom_sku.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

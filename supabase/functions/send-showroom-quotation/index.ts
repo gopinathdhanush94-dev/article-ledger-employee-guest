@@ -8,7 +8,7 @@ Deno.serve(async (req) => {
     const { orderId } = await req.json();
     if (!orderId) throw new Error('orderId is required');
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-    const { data: order, error } = await admin.from('showroom_orders').select('id,order_number,customer_email,customer_name,status,comments,showroom_order_items(product_name,ean,model,category,quantity,required_date)').eq('id', orderId).single();
+    const { data: order, error } = await admin.from('showroom_orders').select('id,order_number,customer_email,customer_name,status,comments,showroom_order_items(product_name,ean,quantity,required_date)').eq('id', orderId).single();
     if (error) throw error;
     const accountsEmail = Deno.env.get('ACCOUNTS_EMAIL');
     const resendKey = Deno.env.get('RESEND_API_KEY');

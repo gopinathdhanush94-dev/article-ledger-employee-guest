@@ -107,7 +107,7 @@ function createQuotationRequestPdf({ orderNumber, customerName, customerEmail, i
     'REQUESTED PRODUCTS',
     ...items.flatMap((item, index) => [
       ...wrap(`${index + 1}. ${displayName(item)}`),
-      ...wrap(`   EAN: ${item.ean || '-'} | Quantity: ${item.quantity} | Required date: ${item.requiredDate || item.required_date || '-'}`),
+      ...wrap(`   EAN: ${item.ean || '-'} | Quantity: ${item.quantity} | Required date: ${item.requiredDate || item.required_date || '-'} | Line total: ${item.quantity} pcs`),
       ''
     ]),
     `TOTAL QUANTITY: ${totalQuantity}`,
@@ -228,11 +228,8 @@ function SelectionPopup({ mode, products, onClose, onOpen, isFavourite, inCart, 
       showroom_item_id: item.id,
       product_name: displayName(item),
       ean: item.ean || null,
-      model: item.model || null,
-      category: item.category || null,
       quantity: Number(cartQuantities[String(item.id)] || 1),
       required_date: requiredDates[String(item.id)],
-      requested_image_url: item.image_url || null,
     }));
     const { error: itemError } = await supabase.from('showroom_order_items').insert(rows);
     if (itemError) { setSubmitError(itemError.message); setSubmitting(false); return; }
@@ -257,7 +254,7 @@ function SelectionPopup({ mode, products, onClose, onOpen, isFavourite, inCart, 
   </PopupShell>;
 
   if (preview && isCart) return <PopupShell title="Quotation request preview" eyebrow="G-RECORDS · QUOTATION" onClose={onClose}>
-    <div className="showroom-preview-list">{selectedProducts.map(item => <div className="showroom-preview-row" key={item.id}><div><strong>{displayName(item)}</strong><span>Qty {cartQuantities[String(item.id)] || 1} · Required {requiredDates[String(item.id)] || '-'}</span></div></div>)}</div><div className="showroom-order-total"><span>Total quantity</span><strong>{selectedProducts.reduce((sum, item) => sum + Math.max(1, Number(cartQuantities[String(item.id)] || 1)), 0)}</strong></div>
+    <div className="showroom-preview-list">{selectedProducts.map(item => { const qty = Math.max(1, Number(cartQuantities[String(item.id)] || 1)); return <div className="showroom-preview-row" key={item.id}><div><strong>{displayName(item)}</strong><span>Qty {qty} · Required {requiredDates[String(item.id)] || '-'}</span></div><strong className="showroom-preview-line-total">{qty} pcs</strong></div>; })}</div><div className="showroom-order-total"><span>Total quantity</span><strong>{selectedProducts.reduce((sum, item) => sum + Math.max(1, Number(cartQuantities[String(item.id)] || 1)), 0)}</strong></div>
     <div className="showroom-order-meta"><div className="wide"><b>Comments</b><span>{comments || '-'}</span></div></div>
     {submitError && <div className="showroom-error">{submitError}</div>}
     <div className="showroom-popup-footer"><button type="button" className="showroom-outline-btn" onClick={() => setPreview(false)}>Edit request</button><button type="button" className="showroom-primary-btn" disabled={submitting} onClick={submitOrder}>{submitting ? 'Submitting…' : 'Submit quotation request'}</button></div>
@@ -266,7 +263,7 @@ function SelectionPopup({ mode, products, onClose, onOpen, isFavourite, inCart, 
   return <PopupShell title={isCart ? 'Cart' : 'Favourite products'} eyebrow="G-RECORDS" onClose={onClose}>
     <div className="showroom-popup-subtitle">{selectedProducts.length} selected product{selectedProducts.length === 1 ? '' : 's'}</div>
     {selectedProducts.length === 0 ? <div className="showroom-popup-empty"><div className="showroom-popup-empty-icon">{isCart ? <CartIcon /> : <HeartIcon />}</div><h3>{isCart ? 'Your cart is empty' : 'No favourites yet'}</h3><p>{isCart ? 'Use Add to cart on a product to save it here.' : 'Use the heart button on a product to save it here.'}</p></div> : <>
-      <div className="showroom-popup-list">{selectedProducts.map(item => <div className="showroom-popup-item" key={item.id}>
+      <div className="showroom-popup-list">{selectedProducts.map(item => <div className={`showroom-popup-item ${isCart ? 'showroom-cart-item' : ''}`} key={item.id}>
         <button type="button" className="showroom-popup-item-image" onClick={() => { onClose(); onOpen(item); }}>{getImage(item) ? <img src={getImage(item)} alt="" /> : <span>{String(item.category || 'P').slice(0,1)}</span>}</button>
         <div className="showroom-popup-item-info"><button type="button" className="showroom-popup-item-name" onClick={() => { onClose(); onOpen(item); }}>{displayName(item)}</button><span>{item.category || 'Product'}{item.ean ? ` · EAN ${item.ean}` : ''}</span></div>
         {isCart && <div className="showroom-cart-request-fields"><label>Qty<input className="showroom-qty-input" type="number" min="1" value={cartQuantities[String(item.id)] || 1} onChange={e => updateQty(item.id, e.target.value)} /></label><label>Required date<input type="date" value={requiredDates[String(item.id)] || ''} onChange={e => updateRequiredDate(item.id, e.target.value)} /></label></div>}

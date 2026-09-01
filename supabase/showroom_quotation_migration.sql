@@ -31,6 +31,18 @@ create table if not exists public.showroom_order_items (
   updated_at timestamptz not null default now()
 );
 
+-- Compatibility for installations where showroom_order_items was created by an older migration.
+alter table public.showroom_order_items add column if not exists model text;
+alter table public.showroom_order_items add column if not exists category text;
+alter table public.showroom_order_items add column if not exists requested_image_url text;
+alter table public.showroom_order_items add column if not exists availability text;
+alter table public.showroom_order_items add column if not exists quoted_unit_price numeric;
+alter table public.showroom_order_items add column if not exists account_note text;
+alter table public.showroom_order_items add column if not exists quoted_at timestamptz;
+
+-- Refresh PostgREST's schema cache immediately after the compatibility changes.
+select pg_notify('pgrst', 'reload schema');
+
 create index if not exists idx_showroom_orders_customer on public.showroom_orders(customer_user_id, submitted_at desc);
 create index if not exists idx_showroom_orders_status on public.showroom_orders(status);
 create index if not exists idx_showroom_order_items_order on public.showroom_order_items(order_id);

@@ -21,7 +21,7 @@ create table if not exists public.showroom_order_items (
   model text,
   category text,
   quantity integer not null default 1 check (quantity > 0),
-  required_date date not null,
+  required_date date,
   requested_image_url text,
   availability text,
   quoted_unit_price numeric,
@@ -33,6 +33,7 @@ create table if not exists public.showroom_order_items (
 
 -- Compatibility for installations where showroom_order_items was created by an older migration.
 alter table public.showroom_order_items add column if not exists model text;
+alter table public.showroom_order_items add column if not exists required_date date;
 alter table public.showroom_order_items add column if not exists category text;
 alter table public.showroom_order_items add column if not exists requested_image_url text;
 alter table public.showroom_order_items add column if not exists availability text;

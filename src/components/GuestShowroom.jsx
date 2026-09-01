@@ -35,6 +35,7 @@ function CartIcon() {
 }
 
 function ShowroomHeader({ search, setSearch, onScan, onSignOut, favouriteCount = 0, cartCount = 0, onFavourites, onCart }) {
+  const [guestMenuOpen, setGuestMenuOpen] = useState(false);
   return (
     <header className="showroom-header">
       <div className="showroom-brand-lockup">
@@ -58,7 +59,15 @@ function ShowroomHeader({ search, setSearch, onScan, onSignOut, favouriteCount =
           <CartIcon />
           {cartCount > 0 && <span className="showroom-count-badge">{cartCount}</span>}
         </button>
-        <button className="showroom-guest-btn" type="button" onClick={onSignOut}>Guest</button>
+        <div className="showroom-guest-menu-wrap">
+          <button className="showroom-guest-btn" type="button" onClick={() => setGuestMenuOpen(open => !open)} aria-haspopup="menu" aria-expanded={guestMenuOpen}>Guest <span className="showroom-guest-chevron">⌄</span></button>
+          {guestMenuOpen && <>
+            <button className="showroom-guest-menu-backdrop" type="button" aria-label="Close guest menu" onClick={() => setGuestMenuOpen(false)} />
+            <div className="showroom-guest-menu" role="menu">
+              <button type="button" role="menuitem" onClick={() => { setGuestMenuOpen(false); onSignOut(); }}>Sign out</button>
+            </div>
+          </>}
+        </div>
       </div>
     </header>
   );

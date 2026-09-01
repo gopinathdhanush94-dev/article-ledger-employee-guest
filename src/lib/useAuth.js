@@ -16,45 +16,59 @@ export function useAuth() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const loadProfile = useCallback(async (userId) => {
+  const loadProfile = useCallback(async (userId, attempts = 3) => {
     if (!userId) {
       setProfile(null);
       return null;
     }
-    const { data, error } = await supabase
-      .from('user_profiles')
-      .select('user_id, full_name, email, employee_id, account_type, role, status, created_at, updated_at')
-      .eq('user_id', userId)
-      .maybeSingle();
-    if (error) {
-      console.error('Could not load account profile:', error);
-      setProfile(null);
-      return null;
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('user_id, full_name, email, employee_id, account_type, role, status, created_at, updated_at')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (data) {
+        setProfile(data);
+        return data;
+      }
+      if (error) console.error('Could not load account profile:', error);
+      if (attempt < attempts - 1) await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
     }
-    setProfile(data || null);
-    return data || null;
+    setProfile(null);
+    return null;
   }, []);
 
   useEffect(() => {
     let mounted = true;
+    let initialised = false;
     supabase.auth.getSession().then(async ({ data }) => {
       if (!mounted) return;
       const sess = data.session || null;
       setSession(sess);
       if (sess?.user?.id) await loadProfile(sess.user.id);
       else setProfile(null);
-      if (mounted) setLoading(false);
+      if (mounted) {
+        initialised = true;
+        setLoading(false);
+      }
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, sess) => {
+      if (!mounted) return;
       setSession(sess || null);
-      if (sess?.user?.id) {
-        // Don't block the auth callback on a database query.
-        Promise.resolve().then(() => loadProfile(sess.user.id));
-      } else {
+      if (!sess) {
         setProfile(null);
+        if (initialised) setLoading(false);
+        return;
       }
-      setLoading(false);
+      // Keep the access gate in a loading state while the guest/employee
+      // profile is being fetched. This prevents a valid guest login from
+      // briefly rendering the "profile not ready" screen.
+      setLoading(true);
+      Promise.resolve().then(async () => {
+        await loadProfile(sess.user.id);
+        if (mounted) setLoading(false);
+      });
     });
 
     return () => {

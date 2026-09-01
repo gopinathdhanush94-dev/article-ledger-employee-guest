@@ -12,6 +12,7 @@ import GarmentForm from './components/GarmentForm.jsx';
 import Calculator from './components/Calculator.jsx';
 import DataQualityCenter from './components/DataQualityCenter.jsx';
 import UserManagement from './components/UserManagement.jsx';
+import ShowroomManager from './components/ShowroomManager.jsx';
 import AccessGate from './components/AccessGate.jsx';
 
 const BrandIconSVG = () => (
@@ -57,7 +58,7 @@ function ScrollToTopButton() {
 }
 
 function AppInner() {
-  const { isAuthed, signIn, signOut, profile, permissions, role } = useAuth();
+  const { isAuthed, signIn, signOut, profile, permissions, role, isEmployee } = useAuth();
   const { showToast } = useToast();
   const dialogs = useDialogs();
 
@@ -319,6 +320,7 @@ function AppInner() {
           <button className={view === 'catalog' ? 'active' : ''} onClick={() => { setCatalogFilters(null); navigate('catalog'); }}>General</button>
           <button className={view === 'garments' ? 'active' : ''} onClick={() => { setGarmentFilters(null); navigate('garments'); }}>Garments</button>
           {permissions.canAdd && <button className={(view === 'add-product' || view === 'add-garment') ? 'active' : ''} onClick={openAddChoice}>+ Add Product</button>}
+          {isEmployee && <button className={view === 'showroom' ? 'active' : ''} onClick={() => navigate('showroom')}>Showroom</button>}
         </nav>
       </header>
 
@@ -387,6 +389,9 @@ function AppInner() {
             {garmentsHasLoadedOnce && (
               <Garments garments={garments} initialFilters={garmentFilters} onEdit={permissions.canEdit ? openEditGarment : undefined} onDelete={permissions.canDelete ? deleteGarment : undefined} />
             )}
+          </div>
+          <div style={{ display: view === 'showroom' ? 'block' : 'none' }}>
+            <ShowroomManager canEdit={permissions.canEdit} canDelete={permissions.canDelete} />
           </div>
           <div style={{ display: view === 'add-garment' ? 'block' : 'none' }}>
             <GarmentForm

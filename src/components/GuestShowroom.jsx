@@ -43,7 +43,7 @@ function ShowroomHeader({ search, setSearch, onScan, onSignOut }) {
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search products…" aria-label="Search showroom products" />
         </div>
         <button className="showroom-scan-btn" type="button" onClick={onScan}><QrIcon /><span>Scan</span></button>
-        <button className="showroom-guest-btn" type="button" onClick={onSignOut}>Guest <span aria-hidden="true">⌄</span></button>
+        <button className="showroom-guest-btn" type="button" onClick={onSignOut}>Guest</button>
       </div>
     </header>
   );
@@ -59,43 +59,96 @@ function ProductCard({ item, onOpen }) {
       <div className="showroom-product-card-body">
         <div className="showroom-product-category">{item.category || item.source_type}</div>
         <h3>{displayName(item)}</h3>
-        <p>{[item.brand, item.model].filter(Boolean).join(' · ') || 'Product details'}</p>
+        <p>{[item.model, item.article_no ? `SKU: ${item.article_no}` : '', item.ean ? `EAN: ${item.ean}` : ''].filter(Boolean).join(' · ') || 'Product details'}</p>
         <span className="showroom-view-link">View details <ArrowIcon /></span>
       </div>
     </button>
   );
 }
 
+function getGallery(item) {
+  const candidates = [item?.image_url, ...(Array.isArray(item?.images) ? item.images : []), ...(Array.isArray(item?.image_urls) ? item.image_urls : [])];
+  return [...new Set(candidates.filter(Boolean).map(String))];
+}
+
 function ProductDetail({ item, onBack, onScanAnother }) {
+  const gallery = getGallery(item);
   const [imageOpen, setImageOpen] = useState(false);
+  const [activeImage, setActiveImage] = useState(0);
   const highlights = Array.isArray(item?.features) ? item.features : [];
+
+  useEffect(() => {
+    if (!imageOpen) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setImageOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [imageOpen]);
+
+  const currentImage = gallery[activeImage] || '';
+
   return (
     <div className="showroom-detail-page">
       <button className="showroom-back" type="button" onClick={onBack}>← Back to showroom</button>
       <div className="showroom-detail-shell">
-        <div className="showroom-detail-media" onClick={() => getImage(item) && setImageOpen(true)} role={getImage(item) ? 'button' : undefined} tabIndex={getImage(item) ? 0 : undefined} onKeyDown={e => { if (getImage(item) && (e.key === 'Enter' || e.key === ' ')) setImageOpen(true); }}>
-          {getImage(item) ? <img src={getImage(item)} alt={displayName(item)} /> : <div className="showroom-detail-fallback">{String(item?.category || 'PRODUCT').slice(0, 1).toUpperCase()}</div>}
-          {getImage(item) && <div className="showroom-image-hint">Tap image to enlarge</div>}
+        <div className="showroom-detail-media-area">
+          <div
+            className="showroom-detail-media showroom-detail-media-compact"
+            onClick={() => currentImage && setImageOpen(true)}
+            role={currentImage ? 'button' : undefined}
+            tabIndex={currentImage ? 0 : undefined}
+            onKeyDown={e => { if (currentImage && (e.key === 'Enter' || e.key === ' ')) setImageOpen(true); }}
+          >
+            {currentImage ? <img src={currentImage} alt={displayName(item)} /> : <div className="showroom-detail-fallback">{String(item?.category || 'PRODUCT').slice(0, 1).toUpperCase()}</div>}
+            {currentImage && <div className="showroom-image-hint">Click image to enlarge</div>}
+          </div>
+          {gallery.length > 0 && (
+            <div className="showroom-thumbnail-strip" aria-label="Product images">
+              {gallery.map((src, index) => (
+                <button
+                  key={`${src}-${index}`}
+                  type="button"
+                  className={`showroom-thumbnail ${activeImage === index ? 'active' : ''}`}
+                  onClick={() => setActiveImage(index)}
+                  aria-label={`View product image ${index + 1}`}
+                >
+                  <img src={src} alt="" />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div className="showroom-detail-main">
           <div className="showroom-detail-kicker">{item.category || 'PRODUCT'}</div>
           <h1>{displayName(item)}</h1>
-          <p className="showroom-detail-subtitle">{[item.brand, item.model].filter(Boolean).join(' · ')}</p>
-          {productCode(item) && <div className="showroom-code-chip">Product code · {productCode(item)}</div>}
+          <p className="showroom-detail-subtitle">{item.model || 'Product details'}</p>
 
-          <section className="showroom-section">
-            <div className="showroom-section-title">Product highlights</div>
-            <div className="showroom-highlight-grid">
+          <section className="showroom-section showroom-sku-section">
+            <div className="showroom-section-title">SKU details</div>
+            <div className="showroom-sku-grid">
               {[
-                ['Brand', item.brand],
+                ['Article No.', item.article_no],
+                ['EAN', item.ean],
                 ['Model', item.model],
                 ['Category', item.category],
-                ['Dimensions', item.dimensions],
               ].filter(([, value]) => value).map(([label, value]) => (
-                <div className="showroom-highlight" key={label}><span>{label}</span><strong>{value}</strong></div>
+                <div className="showroom-sku-item" key={label}><span>{label}</span><strong>{value}</strong></div>
               ))}
             </div>
           </section>
+
+          {item.dimensions && (
+            <section className="showroom-section">
+              <div className="showroom-section-title">Dimensions</div>
+              <p className="showroom-description">{item.dimensions}</p>
+            </section>
+          )}
 
           {(item.description || highlights.length) && (
             <section className="showroom-section">
@@ -112,10 +165,27 @@ function ProductDetail({ item, onBack, onScanAnother }) {
         </div>
       </div>
 
-      {imageOpen && getImage(item) && (
-        <div className="showroom-image-viewer" role="dialog" aria-modal="true" aria-label="Product image" onClick={() => setImageOpen(false)}>
-          <button type="button" className="showroom-image-close" onClick={e => { e.stopPropagation(); setImageOpen(false); }} aria-label="Close image">×</button>
-          <img src={getImage(item)} alt={displayName(item)} onClick={e => e.stopPropagation()} />
+      {imageOpen && currentImage && (
+        <div className="showroom-image-viewer" role="dialog" aria-modal="true" aria-label="Product image viewer" onClick={() => setImageOpen(false)}>
+          <button type="button" className="showroom-image-close" onClick={e => { e.stopPropagation(); setImageOpen(false); }} aria-label="Close image viewer">×</button>
+          <div className="showroom-image-viewer-content" onClick={e => e.stopPropagation()}>
+            <img className="showroom-image-viewer-main" src={currentImage} alt={displayName(item)} />
+            {gallery.length > 0 && (
+              <div className="showroom-image-viewer-thumbs">
+                {gallery.map((src, index) => (
+                  <button
+                    key={`${src}-${index}`}
+                    type="button"
+                    className={`showroom-thumbnail ${activeImage === index ? 'active' : ''}`}
+                    onClick={() => setActiveImage(index)}
+                    aria-label={`View product image ${index + 1}`}
+                  >
+                    <img src={src} alt="" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

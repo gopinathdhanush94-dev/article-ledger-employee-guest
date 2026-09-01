@@ -239,33 +239,65 @@ function SelectionPopup({ mode, products, onClose, onOpen, isFavourite, inCart, 
 
   async function submitOrder() {
     if (!selectedProducts.length) return;
-    if (selectedProducts.some(item => !requiredDates[String(item.id)])) { setSubmitError('Please enter the required date for every product.'); return; }
+    if (selectedProducts.some(item => !requiredDates[String(item.id)])) {
+      setSubmitError('Please enter the required date for every product.');
+      return;
+    }
+
     const customerEmail = customerProfile?.email || session?.user?.email || '';
-    if (!session?.user?.id || !customerEmail) { setSubmitError('Please sign in with a registered guest account before submitting.'); return; }
-    setSubmitting(true); setSubmitError('');
-    const orderNumber = `QR-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${Math.random().toString(36).slice(2,7).toUpperCase()}`;
-    const { data: order, error: orderError } = await supabase.from('showroom_orders').insert({
-      order_number: orderNumber,
-      customer_user_id: session.user.id,
-      customer_email: customerEmail,
-      customer_name: customerProfile.full_name || session.user.email || 'Registered Guest',
-      status: 'quotation_requested',
-      comments: comments || null,
-    }).select('id,order_number').single();
-    if (orderError) { setSubmitError(orderError.message); setSubmitting(false); return; }
-    const rows = selectedProducts.map(item => ({
-      order_id: order.id,
+    if (!session?.user?.id || !customerEmail) {
+      setSubmitError('Please sign in with a registered guest account before submitting.');
+      return;
+    }
+
+    setSubmitting(true);
+    setSubmitError('');
+
+    // Submit the order and all lines through one database transaction (RPC).
+    // This prevents partial orders and eliminates client-side FK timing/RLS issues.
+    const items = selectedProducts.map(item => ({
       showroom_item_id: item.id,
       product_name: displayName(item),
       ean: item.ean || null,
-      quantity: Number(cartQuantities[String(item.id)] || 1),
+      quantity: Math.max(1, Math.floor(Number(cartQuantities[String(item.id)] || 1))),
       required_date: requiredDates[String(item.id)],
     }));
-    const { error: itemError } = await supabase.from('showroom_order_items').insert(rows);
-    if (itemError) { setSubmitError(itemError.message); setSubmitting(false); return; }
-    createQuotationRequestPdf({ orderNumber, customerName: customerProfile?.full_name || session.user.email, customerEmail, items: rows, comments });
-    const { error: emailError } = await supabase.functions.invoke('send-showroom-quotation', { body: { orderId: order.id } });
-    if (emailError) console.warn('Order saved, but email notification failed:', emailError.message);
+
+    const { data: result, error: submitRpcError } = await supabase.rpc('submit_showroom_quotation_request', {
+      p_items: items,
+      p_comments: comments || null,
+    });
+
+    if (submitRpcError) {
+      console.error('Showroom quotation submission failed:', submitRpcError);
+      setSubmitError(submitRpcError.message || 'Could not submit the quotation request. Please try again.');
+      setSubmitting(false);
+      return;
+    }
+
+    const order = Array.isArray(result) ? result[0] : result;
+    if (!order?.id || !order?.order_number) {
+      setSubmitError('The quotation was saved, but no request number was returned. Please contact an administrator.');
+      setSubmitting(false);
+      return;
+    }
+
+    const orderNumber = order.order_number;
+    createQuotationRequestPdf({
+      orderNumber,
+      customerName: customerProfile?.full_name || session.user.email,
+      customerEmail,
+      items,
+      comments,
+    });
+
+    const { error: emailError } = await supabase.functions.invoke('send-showroom-quotation', {
+      body: { orderId: order.id },
+    });
+    if (emailError) {
+      console.warn('Order saved, but email notification failed:', emailError.message);
+    }
+
     setSubmitted(orderNumber);
     setSubmitting(false);
     setCart([]);

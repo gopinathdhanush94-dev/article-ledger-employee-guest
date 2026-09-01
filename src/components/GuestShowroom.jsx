@@ -227,15 +227,17 @@ function createQuotationRequestPdf({ orderNumber, customerName, customerEmail, i
 
 function SelectionPopup({ mode, products, onClose, onOpen, isFavourite, inCart, onToggleFavourite, onToggleCart, cartQuantities, setCartQuantities, customerProfile, session }) {
   const isCart = mode === 'cart';
-  const [comments, setComments] = useState('');
+  const [comments, setComments] = useState(() => { try { return localStorage.getItem('g-records-showroom-order-comments') || ''; } catch { return ''; } });
   const [requiredDates, setRequiredDates] = useState(() => { try { return JSON.parse(localStorage.getItem('g-records-showroom-required-dates') || '{}'); } catch { return {}; } });
-  const [preview, setPreview] = useState(false);
+  const [preview, setPreview] = useState(() => { try { return localStorage.getItem('g-records-showroom-order-preview') === '1'; } catch { return false; } });
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitted, setSubmitted] = useState(null);
   const selectedProducts = products.filter(item => isCart ? inCart(item) : isFavourite(item));
   const updateQty = (id, value) => setCartQuantities(current => ({ ...current, [String(id)]: Math.max(1, Math.floor(Number(value) || 1)) }));
   const updateRequiredDate = (id, value) => setRequiredDates(current => { const next = { ...current, [String(id)]: value }; localStorage.setItem('g-records-showroom-required-dates', JSON.stringify(next)); return next; });
+  useEffect(() => { try { localStorage.setItem('g-records-showroom-order-comments', comments); } catch {} }, [comments]);
+  useEffect(() => { try { localStorage.setItem('g-records-showroom-order-preview', preview ? '1' : '0'); } catch {} }, [preview]);
 
   async function submitOrder() {
     if (!selectedProducts.length) return;
@@ -301,6 +303,12 @@ function SelectionPopup({ mode, products, onClose, onOpen, isFavourite, inCart, 
     setSubmitted(orderNumber);
     setSubmitting(false);
     setCart([]);
+    try {
+      localStorage.removeItem('g-records-showroom-cart');
+      localStorage.removeItem('g-records-showroom-order-comments');
+      localStorage.removeItem('g-records-showroom-order-preview');
+      localStorage.removeItem('g-records-showroom-required-dates');
+    } catch {}
   }
 
   // Keep a local empty-cart setter without mutating the parent's source of truth
@@ -535,7 +543,16 @@ export default function GuestShowroom() {
   const [favourites, setFavourites] = useState(() => { try { return JSON.parse(localStorage.getItem('g-records-showroom-favourites') || '[]'); } catch { return []; } });
   const [cart, setCart] = useState(() => { try { return JSON.parse(localStorage.getItem('g-records-showroom-cart') || '[]'); } catch { return []; } });
   const [cartQuantities, setCartQuantities] = useState(() => { try { return JSON.parse(localStorage.getItem('g-records-showroom-cart-quantities') || '{}'); } catch { return {}; } });
-  const [popup, setPopup] = useState(null);
+  const [popup, setPopup] = useState(() => {
+    try { return localStorage.getItem('g-records-showroom-popup') || null; } catch { return null; }
+  });
+
+  useEffect(() => {
+    try {
+      if (popup) localStorage.setItem('g-records-showroom-popup', popup);
+      else localStorage.removeItem('g-records-showroom-popup');
+    } catch {}
+  }, [popup]);
 
   useEffect(() => { localStorage.setItem('g-records-showroom-favourites', JSON.stringify(favourites)); }, [favourites]);
   useEffect(() => { localStorage.setItem('g-records-showroom-cart', JSON.stringify(cart)); }, [cart]);

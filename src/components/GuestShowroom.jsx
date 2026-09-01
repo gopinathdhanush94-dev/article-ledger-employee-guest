@@ -82,28 +82,125 @@ function PopupShell({ title, eyebrow, onClose, children }) {
   </div>;
 }
 
-function SelectionPopup({ mode, products, onClose, onOpen, isFavourite, inCart, onToggleFavourite, onToggleCart, cartQuantities, setCartQuantities }) {
-  const isCart = mode === 'cart';
-  const [leadPeriod, setLeadPeriod] = useState('');
-  const [requiredDate, setRequiredDate] = useState('');
-  const [comments, setComments] = useState('');
-  const [preview, setPreview] = useState(false);
-  const selectedProducts = products.filter(item => isCart ? inCart(item) : isFavourite(item));
-  const total = isCart ? selectedProducts.reduce((sum, item) => sum + (Number(item.mrp) || 0) * (Number(cartQuantities[String(item.id)] || 1)), 0) : 0;
-  const updateQty = (id, value) => setCartQuantities(current => ({ ...current, [String(id)]: Math.max(1, Math.floor(Number(value) || 1)) }));
+function createQuotationRequestPdf({ orderNumber, customerName, customerEmail, items, comments }) {
+  // Small dependency-free PDF writer so the showroom can download a PDF without
+  // exposing MRP/selling prices to the retail customer.
+  const esc = value => String(value ?? '').replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  const lines = [
+    'G-RECORDS - SHOWROOM QUOTATION REQUEST',
+    `Request No: ${orderNumber}`,
+    `Customer: ${customerName || 'Registered Guest'}`,
+    `Email: ${customerEmail || '-'}`,
+    '',
+    'Requested products:',
+    ...items.map((item, i) => `${i + 1}. ${displayName(item)} | EAN ${item.ean || '-'} | Qty ${item.quantity} | Required ${item.requiredDate || '-'}`),
+    '',
+    `Comments: ${comments || '-'}`,
+    '',
+    'This document is a quotation request. Pricing and availability will be confirmed by G-RECORDS Accounts.',
+  ];
+  const stream = ['BT', '/F1 10 Tf', '50 790 Td', ...lines.map((line, i) => `${i ? '0 -16 Td ' : ''}(${esc(line.slice(0, 120))}) Tj`), 'ET'].join('\n');
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  objects.forEach((obj, i) => { offsets[i + 1] = pdf.length; pdf += `${i + 1} 0 obj\n${obj}\nendobj\n`; });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (let i = 1; i <= objects.length; i++) pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  const blob = new Blob([pdf], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `G-Records-Quotation-Request-${orderNumber}.pdf`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
-  if (preview && isCart) return <PopupShell title="Order preview" eyebrow="G-RECORDS · ORDER" onClose={onClose}>
-    <div className="showroom-preview-list">{selectedProducts.map(item => <div className="showroom-preview-row" key={item.id}><div><strong>{displayName(item)}</strong><span>Qty {cartQuantities[String(item.id)] || 1} × ₹{Number(item.mrp || 0).toLocaleString('en-IN')}</span></div><strong>₹{((Number(item.mrp || 0) * Number(cartQuantities[String(item.id)] || 1))).toLocaleString('en-IN')}</strong></div>)}</div>
-    <div className="showroom-popup-total"><span>Total MRP</span><strong>₹{total.toLocaleString('en-IN')}</strong></div>
-    <div className="showroom-order-meta"><div><b>Lead period</b><span>{leadPeriod || '—'}</span></div><div><b>Required date</b><span>{requiredDate || '—'}</span></div><div className="wide"><b>Comments</b><span>{comments || '—'}</span></div></div>
-    <div className="showroom-popup-footer"><button type="button" className="showroom-outline-btn" onClick={() => setPreview(false)}>Edit order</button><button type="button" className="showroom-primary-btn" onClick={() => { alert('Order preview is ready. Submit integration can be connected to the showroom order table.'); }}>Submit order</button></div>
+function SelectionPopup({ mode, products, onClose, onOpen, isFavourite, inCart, onToggleFavourite, onToggleCart, cartQuantities, setCartQuantities, customerProfile, session }) {
+  const isCart = mode === 'cart';
+  const [comments, setComments] = useState('');
+  const [requiredDates, setRequiredDates] = useState(() => { try { return JSON.parse(localStorage.getItem('g-records-showroom-required-dates') || '{}'); } catch { return {}; } });
+  const [preview, setPreview] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [submitted, setSubmitted] = useState(null);
+  const selectedProducts = products.filter(item => isCart ? inCart(item) : isFavourite(item));
+  const updateQty = (id, value) => setCartQuantities(current => ({ ...current, [String(id)]: Math.max(1, Math.floor(Number(value) || 1)) }));
+  const updateRequiredDate = (id, value) => setRequiredDates(current => { const next = { ...current, [String(id)]: value }; localStorage.setItem('g-records-showroom-required-dates', JSON.stringify(next)); return next; });
+
+  async function submitOrder() {
+    if (!selectedProducts.length) return;
+    if (selectedProducts.some(item => !requiredDates[String(item.id)])) { setSubmitError('Please enter the required date for every product.'); return; }
+    const customerEmail = customerProfile?.email || session?.user?.email || '';
+    if (!session?.user?.id || !customerEmail) { setSubmitError('Please sign in with a registered guest account before submitting.'); return; }
+    setSubmitting(true); setSubmitError('');
+    const orderNumber = `QR-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${Math.random().toString(36).slice(2,7).toUpperCase()}`;
+    const { data: order, error: orderError } = await supabase.from('showroom_orders').insert({
+      order_number: orderNumber,
+      customer_user_id: session.user.id,
+      customer_email: customerEmail,
+      customer_name: customerProfile.full_name || session.user.email || 'Registered Guest',
+      status: 'quotation_requested',
+      comments: comments || null,
+    }).select('id,order_number').single();
+    if (orderError) { setSubmitError(orderError.message); setSubmitting(false); return; }
+    const rows = selectedProducts.map(item => ({
+      order_id: order.id,
+      showroom_item_id: item.id,
+      product_name: displayName(item),
+      ean: item.ean || null,
+      model: item.model || null,
+      category: item.category || null,
+      quantity: Number(cartQuantities[String(item.id)] || 1),
+      required_date: requiredDates[String(item.id)],
+      requested_image_url: item.image_url || null,
+    }));
+    const { error: itemError } = await supabase.from('showroom_order_items').insert(rows);
+    if (itemError) { setSubmitError(itemError.message); setSubmitting(false); return; }
+    createQuotationRequestPdf({ orderNumber, customerName: customerProfile?.full_name || session.user.email, customerEmail, items: rows, comments });
+    const { error: emailError } = await supabase.functions.invoke('send-showroom-quotation', { body: { orderId: order.id } });
+    if (emailError) console.warn('Order saved, but email notification failed:', emailError.message);
+    setSubmitted(orderNumber);
+    setSubmitting(false);
+    setCart([]);
+  }
+
+  // Keep a local empty-cart setter without mutating the parent's source of truth
+  // through a hidden dependency.
+  const setCart = updater => {
+    const current = products.filter(inCart).map(x => x.id);
+    const next = typeof updater === 'function' ? updater(current) : updater;
+    current.forEach(id => { if (!next.some(x => String(x) === String(id))) onToggleCart(products.find(x => String(x.id) === String(id))); });
+  };
+
+  if (submitted && isCart) return <PopupShell title="Request submitted" eyebrow="G-RECORDS · QUOTATION" onClose={onClose}>
+    <div className="showroom-popup-empty"><div className="showroom-popup-empty-icon">✓</div><h3>Quotation request sent</h3><p>Request <strong>{submitted}</strong> has been sent to your registered email and G-RECORDS Accounts. Your PDF has also been downloaded.</p><div className="showroom-popup-footer"><button type="button" className="showroom-primary-btn" onClick={onClose}>Done</button></div></div>
+  </PopupShell>;
+
+  if (preview && isCart) return <PopupShell title="Quotation request preview" eyebrow="G-RECORDS · QUOTATION" onClose={onClose}>
+    <div className="showroom-preview-list">{selectedProducts.map(item => <div className="showroom-preview-row" key={item.id}><div><strong>{displayName(item)}</strong><span>Qty {cartQuantities[String(item.id)] || 1} · Required {requiredDates[String(item.id)] || '-'}</span></div></div>)}</div>
+    <div className="showroom-order-meta"><div className="wide"><b>Comments</b><span>{comments || '-'}</span></div></div>
+    {submitError && <div className="showroom-error">{submitError}</div>}
+    <div className="showroom-popup-footer"><button type="button" className="showroom-outline-btn" onClick={() => setPreview(false)}>Edit request</button><button type="button" className="showroom-primary-btn" disabled={submitting} onClick={submitOrder}>{submitting ? 'Submitting…' : 'Submit quotation request'}</button></div>
   </PopupShell>;
 
   return <PopupShell title={isCart ? 'Cart' : 'Favourite products'} eyebrow="G-RECORDS" onClose={onClose}>
     <div className="showroom-popup-subtitle">{selectedProducts.length} selected product{selectedProducts.length === 1 ? '' : 's'}</div>
     {selectedProducts.length === 0 ? <div className="showroom-popup-empty"><div className="showroom-popup-empty-icon">{isCart ? <CartIcon /> : <HeartIcon />}</div><h3>{isCart ? 'Your cart is empty' : 'No favourites yet'}</h3><p>{isCart ? 'Use Add to cart on a product to save it here.' : 'Use the heart button on a product to save it here.'}</p></div> : <>
-      <div className="showroom-popup-list">{selectedProducts.map(item => <div className="showroom-popup-item" key={item.id}><button type="button" className="showroom-popup-item-image" onClick={() => { onClose(); onOpen(item); }}>{getImage(item) ? <img src={getImage(item)} alt="" /> : <span>{String(item.category || 'P').slice(0,1)}</span>}</button><div className="showroom-popup-item-info"><button type="button" className="showroom-popup-item-name" onClick={() => { onClose(); onOpen(item); }}>{displayName(item)}</button><span>{item.category || 'Product'}{item.ean ? ` · EAN ${item.ean}` : ''}</span>{isCart && <span>MRP ₹{Number(item.mrp || 0).toLocaleString('en-IN')}</span>}</div>{isCart && <input className="showroom-qty-input" type="number" min="1" value={cartQuantities[String(item.id)] || 1} onChange={e => updateQty(item.id, e.target.value)} aria-label={`Quantity for ${displayName(item)}`} /> }<div className="showroom-popup-item-actions"><button type="button" className="showroom-small-btn" onClick={() => onToggleFavourite(item)} title={isFavourite(item) ? 'Remove favourite' : 'Add favourite'}><HeartIcon filled={isFavourite(item)} /></button>{isCart ? <button type="button" className="showroom-small-btn active" onClick={() => onToggleCart(item)} title="Remove from cart"><CartIcon /></button> : <button type="button" className={`showroom-small-btn ${inCart(item) ? 'active' : ''}`} onClick={() => onToggleCart(item)} title={inCart(item) ? 'Remove from cart' : 'Add to cart'}><CartIcon /></button>}</div>{isCart && <strong className="showroom-line-total">₹{(Number(item.mrp || 0) * Number(cartQuantities[String(item.id)] || 1)).toLocaleString('en-IN')}</strong>}</div>)}</div>
-      {isCart && <><div className="showroom-popup-total"><span>Total MRP</span><strong>₹{total.toLocaleString('en-IN')}</strong></div><div className="showroom-order-fields"><label>Lead period<input value={leadPeriod} onChange={e => setLeadPeriod(e.target.value)} placeholder="e.g. 30 days" /></label><label>Required date<input type="date" value={requiredDate} onChange={e => setRequiredDate(e.target.value)} /></label><label className="wide">Comments<textarea value={comments} onChange={e => setComments(e.target.value)} placeholder="Comments related to this order…" rows="3" /></label></div><div className="showroom-popup-footer"><button type="button" className="showroom-primary-btn" onClick={() => setPreview(true)}>Preview order</button></div></>}
+      <div className="showroom-popup-list">{selectedProducts.map(item => <div className="showroom-popup-item" key={item.id}>
+        <button type="button" className="showroom-popup-item-image" onClick={() => { onClose(); onOpen(item); }}>{getImage(item) ? <img src={getImage(item)} alt="" /> : <span>{String(item.category || 'P').slice(0,1)}</span>}</button>
+        <div className="showroom-popup-item-info"><button type="button" className="showroom-popup-item-name" onClick={() => { onClose(); onOpen(item); }}>{displayName(item)}</button><span>{item.category || 'Product'}{item.ean ? ` · EAN ${item.ean}` : ''}</span></div>
+        {isCart && <div className="showroom-cart-request-fields"><label>Qty<input className="showroom-qty-input" type="number" min="1" value={cartQuantities[String(item.id)] || 1} onChange={e => updateQty(item.id, e.target.value)} /></label><label>Required date<input type="date" value={requiredDates[String(item.id)] || ''} onChange={e => updateRequiredDate(item.id, e.target.value)} /></label></div>}
+        <div className="showroom-popup-item-actions"><button type="button" className="showroom-small-btn" onClick={() => onToggleFavourite(item)} title={isFavourite(item) ? 'Remove favourite' : 'Add favourite'}><HeartIcon filled={isFavourite(item)} /></button><button type="button" className={`showroom-small-btn ${isCart ? 'active' : inCart(item) ? 'active' : ''}`} onClick={() => onToggleCart(item)} title={isCart ? 'Remove from cart' : inCart(item) ? 'Remove from cart' : 'Add to cart'}><CartIcon /></button></div>
+      </div>)}</div>
+      {isCart && <><div className="showroom-order-fields"><label className="wide">Comments<textarea value={comments} onChange={e => setComments(e.target.value)} placeholder="Comments related to this quotation request…" rows="3" /></label></div>{submitError && <div className="showroom-error">{submitError}</div>}<div className="showroom-popup-footer"><button type="button" className="showroom-primary-btn" onClick={() => setPreview(true)}>Preview quotation request</button></div></>}
     </>}
   </PopupShell>;
 }
@@ -150,7 +247,7 @@ function skuDimensions(item) {
   const values = [item?.sku_l, item?.sku_w, item?.sku_h];
   if (!values.some(v => v !== null && v !== undefined && v !== '')) return '';
   const unit = item?.sku_dim_unit ? ` ${item.sku_dim_unit}` : '';
-  return `${values.map(v => formatNumber(v) || '—').join(' × ')}${unit}`;
+  return `${values.map(v => formatNumber(v) || '-').join(' × ')}${unit}`;
 }
 
 function skuWeight(item, net = true) {
@@ -244,7 +341,7 @@ function ProductDetail({ item, onBack, onScanAnother, isFavourite, inCart, onTog
                 ['Net weight', skuWeight(item, true)],
                 ['Gross weight', skuWeight(item, false)],
               ].map(([label, value]) => (
-                <div className="showroom-sku-item" key={label}><span>{label}</span><strong>{value || '—'}</strong></div>
+                <div className="showroom-sku-item" key={label}><span>{label}</span><strong>{value || '-'}</strong></div>
               ))}
             </div>
           </section>
@@ -295,7 +392,7 @@ function ProductDetail({ item, onBack, onScanAnother, isFavourite, inCart, onTog
 }
 
 export default function GuestShowroom() {
-  const { signOut } = useAuth();
+  const { signOut, profile, session } = useAuth();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -422,7 +519,7 @@ export default function GuestShowroom() {
         <ShowroomHeader search={search} setSearch={value => { setSearch(value); setCollectionMode('all'); }} onScan={openScanner} onSignOut={signOut} favouriteCount={favouriteCount} cartCount={cartCount} onFavourites={() => setPopup('favourites')} onCart={() => setPopup('cart')} />
         <ProductDetail item={selected} onBack={() => setSelected(null)} onScanAnother={openScanner} isFavourite={isFavourite(selected)} inCart={inCart(selected)} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} />
         {scannerOpen && <ScannerModal products={items} onScan={handleScan} onClose={() => setScannerOpen(false)} />}
-        {popup && <SelectionPopup mode={popup} products={items} onClose={() => setPopup(null)} onOpen={openItem} isFavourite={isFavourite} inCart={inCart} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} cartQuantities={cartQuantities} setCartQuantities={setCartQuantities} />}
+        {popup && <SelectionPopup mode={popup} products={items} onClose={() => setPopup(null)} onOpen={openItem} isFavourite={isFavourite} inCart={inCart} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} cartQuantities={cartQuantities} setCartQuantities={setCartQuantities} customerProfile={profile} session={session} />}
       </div>
     );
   }
@@ -464,7 +561,7 @@ export default function GuestShowroom() {
       </main>
       <footer className="showroom-footer"><div>G-Records · Product Showroom</div><div>Guest access · Public product information only</div></footer>
       {scannerOpen && <ScannerModal products={items} onScan={handleScan} onClose={() => setScannerOpen(false)} />}
-      {popup && <SelectionPopup mode={popup} products={items} onClose={() => setPopup(null)} onOpen={openItem} isFavourite={isFavourite} inCart={inCart} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} cartQuantities={cartQuantities} setCartQuantities={setCartQuantities} />}
+      {popup && <SelectionPopup mode={popup} products={items} onClose={() => setPopup(null)} onOpen={openItem} isFavourite={isFavourite} inCart={inCart} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} cartQuantities={cartQuantities} setCartQuantities={setCartQuantities} customerProfile={profile} session={session} />}
     </div>
   );
 }

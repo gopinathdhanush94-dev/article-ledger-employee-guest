@@ -13,6 +13,7 @@ import Calculator from './components/Calculator.jsx';
 import DataQualityCenter from './components/DataQualityCenter.jsx';
 import UserManagement from './components/UserManagement.jsx';
 import ShowroomManager from './components/ShowroomManager.jsx';
+import ShowroomOrders from './components/ShowroomOrders.jsx';
 import AccessGate from './components/AccessGate.jsx';
 
 const BrandIconSVG = () => (
@@ -320,7 +321,8 @@ function AppInner() {
           <button className={view === 'catalog' ? 'active' : ''} onClick={() => { setCatalogFilters(null); navigate('catalog'); }}>General</button>
           <button className={view === 'garments' ? 'active' : ''} onClick={() => { setGarmentFilters(null); navigate('garments'); }}>Garments</button>
           {permissions.canAdd && <button className={(view === 'add-product' || view === 'add-garment') ? 'active' : ''} onClick={openAddChoice}>+ Add Product</button>}
-          {isEmployee && <button className={view === 'showroom' ? 'active' : ''} onClick={() => navigate('showroom')}>Showroom</button>}
+          {isEmployee && <button className={view === 'showroom' ? 'active' : ''} onClick={() => navigate('showroom')}>Showroom</button>
+          {isEmployee && <button className={view === 'showroom-orders' ? 'active' : ''} onClick={() => navigate('showroom-orders')}>Quotation Requests</button>}}
         </nav>
       </header>
 
@@ -392,6 +394,9 @@ function AppInner() {
           </div>
           <div style={{ display: view === 'showroom' ? 'block' : 'none' }}>
             <ShowroomManager canEdit={permissions.canEdit} canDelete={permissions.canDelete} />
+          </div>
+          <div style={{ display: view === 'showroom-orders' ? 'block' : 'none' }}>
+            <ShowroomOrders />
           </div>
           <div style={{ display: view === 'add-garment' ? 'block' : 'none' }}>
             <GarmentForm

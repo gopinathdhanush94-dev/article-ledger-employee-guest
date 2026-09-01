@@ -83,44 +83,116 @@ function PopupShell({ title, eyebrow, onClose, children }) {
 }
 
 function createQuotationRequestPdf({ orderNumber, customerName, customerEmail, items, comments }) {
-  // Small dependency-free PDF writer so the showroom can download a PDF without
-  // exposing MRP/selling prices to the retail customer.
-  const esc = value => String(value ?? '').replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  // Generate a real, dependency-free PDF. Customer documents contain product
+  // request information only — never MRP, selling price, or line pricing.
+  const sanitize = value => String(value ?? '')
+    .replace(/[–—]/g, '-')
+    .replace(/×/g, 'x')
+    .replace(/₹/g, 'Rs')
+    .replace(/[^\x20-\x7E]/g, '');
+  const wrap = (value, width = 88) => {
+    const text = sanitize(value);
+    if (!text) return [''];
+    const out = [];
+    for (let i = 0; i < text.length; i += width) out.push(text.slice(i, i + width));
+    return out;
+  };
+  const totalQuantity = items.reduce((sum, item) => sum + Math.max(1, Number(item.quantity) || 1), 0);
   const lines = [
     'G-RECORDS - SHOWROOM QUOTATION REQUEST',
     `Request No: ${orderNumber}`,
     `Customer: ${customerName || 'Registered Guest'}`,
     `Email: ${customerEmail || '-'}`,
     '',
-    'Requested products:',
-    ...items.map((item, i) => `${i + 1}. ${displayName(item)} | EAN ${item.ean || '-'} | Qty ${item.quantity} | Required ${item.requiredDate || '-'}`),
+    'REQUESTED PRODUCTS',
+    ...items.flatMap((item, index) => [
+      ...wrap(`${index + 1}. ${displayName(item)}`),
+      ...wrap(`   EAN: ${item.ean || '-'} | Quantity: ${item.quantity} | Required date: ${item.requiredDate || item.required_date || '-'}`),
+      ''
+    ]),
+    `TOTAL QUANTITY: ${totalQuantity}`,
     '',
-    `Comments: ${comments || '-'}`,
+    'COMMENTS',
+    ...wrap(comments || '-'),
     '',
-    'This document is a quotation request. Pricing and availability will be confirmed by G-RECORDS Accounts.',
+    'Pricing and availability will be confirmed by G-RECORDS Accounts.',
   ];
-  const stream = ['BT', '/F1 10 Tf', '50 790 Td', ...lines.map((line, i) => `${i ? '0 -16 Td ' : ''}(${esc(line.slice(0, 120))}) Tj`), 'ET'].join('\n');
-  const objects = [
-    '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+
+  const encoder = new TextEncoder();
+  const byteLength = value => encoder.encode(value).length;
+  const escPdf = value => sanitize(value).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  const pageHeight = 842;
+  const left = 50;
+  const top = 790;
+  const lineHeight = 14;
+  const linesPerPage = 48;
+  const pages = [];
+  for (let i = 0; i < lines.length; i += linesPerPage) pages.push(lines.slice(i, i + linesPerPage));
+
+  const objects = [];
+  objects.push('<< /Type /Catalog /Pages 2 0 R >>');
+  objects.push(''); // filled after page objects are known
+  objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  const pageObjectNumbers = [];
+  let nextObject = 4;
+  pages.forEach(() => { pageObjectNumbers.push(nextObject); nextObject += 2; });
+  objects[1] = `<< /Type /Pages /Kids [${pageObjectNumbers.map(n => `${n} 0 R`).join(' ')}] /Count ${pages.length} >>`;
+  pages.forEach(pageLines => {
+    const streamLines = ['BT', '/F1 10 Tf', `${left} ${top} Td`];
+    pageLines.forEach((line, idx) => {
+      if (idx) streamLines.push(`0 -${lineHeight} Td`);
+      streamLines.push(`(${escPdf(line)}) Tj`);
+    });
+    streamLines.push('ET');
+    const stream = streamLines.join('\n');
+    const pageNo = pageObjectNumbers[pages.indexOf(pageLines)];
+    const contentNo = pageNo + 1;
+    while (objects.length + 1 < pageNo) objects.push('');
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 ${pageHeight}] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentNo} 0 R >>`);
+    objects.push(`<< /Length ${byteLength(stream)} >>\nstream\n${stream}\nendstream`);
+  });
+
+  // Rebuild object list with stable object numbers, avoiding dependence on
+  // array/string character counts for non-ASCII browser text.
+  const allObjects = [
+    objects[0], objects[1], objects[2],
+    ...pages.flatMap((pageLines, pageIndex) => {
+      const streamLines = ['BT', '/F1 10 Tf', `${left} ${top} Td`];
+      pageLines.forEach((line, idx) => {
+        if (idx) streamLines.push(`0 -${lineHeight} Td`);
+        streamLines.push(`(${escPdf(line)}) Tj`);
+      });
+      streamLines.push('ET');
+      const stream = streamLines.join('\n');
+      const pageNo = 4 + pageIndex * 2;
+      const contentNo = pageNo + 1;
+      return [
+        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 ${pageHeight}] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentNo} 0 R >>`,
+        `<< /Length ${byteLength(stream)} >>\nstream\n${stream}\nendstream`,
+      ];
+    })
   ];
+
   let pdf = '%PDF-1.4\n';
   const offsets = [0];
-  objects.forEach((obj, i) => { offsets[i + 1] = pdf.length; pdf += `${i + 1} 0 obj\n${obj}\nendobj\n`; });
-  const xref = pdf.length;
-  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  for (let i = 1; i <= objects.length; i++) pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
-  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
-  const blob = new Blob([pdf], { type: 'application/pdf' });
+  allObjects.forEach((obj, index) => {
+    offsets[index + 1] = byteLength(pdf);
+    pdf += `${index + 1} 0 obj\n${obj}\nendobj\n`;
+  });
+  const xrefOffset = byteLength(pdf);
+  pdf += `xref\n0 ${allObjects.length + 1}\n0000000000 65535 f \n`;
+  for (let i = 1; i <= allObjects.length; i++) pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${allObjects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+
+  const blob = new Blob([encoder.encode(pdf)], { type: 'application/pdf' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `G-Records-Quotation-Request-${orderNumber}.pdf`;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  a.download = `G-Records-Quotation-Request-${sanitize(orderNumber)}.pdf`;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1500);
 }
 
 function SelectionPopup({ mode, products, onClose, onOpen, isFavourite, inCart, onToggleFavourite, onToggleCart, cartQuantities, setCartQuantities, customerProfile, session }) {
@@ -185,7 +257,7 @@ function SelectionPopup({ mode, products, onClose, onOpen, isFavourite, inCart, 
   </PopupShell>;
 
   if (preview && isCart) return <PopupShell title="Quotation request preview" eyebrow="G-RECORDS · QUOTATION" onClose={onClose}>
-    <div className="showroom-preview-list">{selectedProducts.map(item => <div className="showroom-preview-row" key={item.id}><div><strong>{displayName(item)}</strong><span>Qty {cartQuantities[String(item.id)] || 1} · Required {requiredDates[String(item.id)] || '-'}</span></div></div>)}</div>
+    <div className="showroom-preview-list">{selectedProducts.map(item => <div className="showroom-preview-row" key={item.id}><div><strong>{displayName(item)}</strong><span>Qty {cartQuantities[String(item.id)] || 1} · Required {requiredDates[String(item.id)] || '-'}</span></div></div>)}</div><div className="showroom-order-total"><span>Total quantity</span><strong>{selectedProducts.reduce((sum, item) => sum + Math.max(1, Number(cartQuantities[String(item.id)] || 1)), 0)}</strong></div>
     <div className="showroom-order-meta"><div className="wide"><b>Comments</b><span>{comments || '-'}</span></div></div>
     {submitError && <div className="showroom-error">{submitError}</div>}
     <div className="showroom-popup-footer"><button type="button" className="showroom-outline-btn" onClick={() => setPreview(false)}>Edit request</button><button type="button" className="showroom-primary-btn" disabled={submitting} onClick={submitOrder}>{submitting ? 'Submitting…' : 'Submit quotation request'}</button></div>

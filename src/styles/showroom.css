@@ -90,3 +90,32 @@
 .showroom-image-viewer-thumbs{justify-content:center;max-width:100%;padding-bottom:4px}
 @media(max-width:720px){.showroom-product-image-wrap{height:135px}.showroom-detail-media-compact{min-height:330px;height:330px}.showroom-sku-grid{grid-template-columns:1fr}.showroom-sku-item:nth-child(odd){border-right:0}.showroom-thumbnail{width:58px;height:58px;flex-basis:58px}}
 @media(max-width:460px){.showroom-product-image-wrap{height:175px}.showroom-detail-media-compact{height:300px;min-height:300px}}
+
+/* Showroom Phase 2 - compact cards, product actions, and image viewer */
+.showroom-product-card{display:flex;flex-direction:column;min-width:0}
+.showroom-product-card-main{display:block;width:100%;padding:0;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
+.showroom-product-image-wrap{height:128px}
+.showroom-product-image-wrap img{padding:8px}
+.showroom-product-card-body{padding:11px 13px 12px}
+.showroom-product-card h3{font-size:14px;line-height:1.3;margin:5px 0 4px}
+.showroom-product-card p{font-size:10.5px;min-height:30px;line-height:1.4}
+.showroom-card-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:0 13px 13px}
+.showroom-card-action{min-width:0;border:1px solid rgba(148,163,184,.24);background:#fff;border-radius:10px;padding:8px 7px;display:flex;align-items:center;justify-content:center;gap:5px;color:var(--text-soft);font:inherit;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap}
+.showroom-card-action svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;flex:0 0 auto}
+.showroom-card-action.active{background:rgba(228,87,46,.08);border-color:rgba(228,87,46,.28);color:var(--primary)}
+.showroom-icon-btn{position:relative;width:42px;height:42px;border:1px solid rgba(148,163,184,.22);border-radius:13px;background:rgba(255,255,255,.72);color:var(--text);display:grid;place-items:center;cursor:pointer}
+.showroom-icon-btn svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8}
+.showroom-count-badge{position:absolute;right:-5px;top:-6px;min-width:18px;height:18px;padding:0 4px;border-radius:999px;background:var(--primary);color:#fff;font-size:10px;font-weight:900;display:grid;place-items:center;border:2px solid #f7f9fc}
+.showroom-detail-media-compact{min-height:360px;height:360px}
+.showroom-detail-media-compact img{padding:18px}
+.showroom-sku-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.showroom-image-viewer{padding:20px}
+.showroom-image-viewer-content{width:min(1200px,94vw);max-width:none;max-height:96dvh;gap:14px}
+.showroom-image-viewer-main{width:min(92vw,1160px);height:min(80dvh,820px);max-width:none;max-height:none;object-fit:contain;border-radius:14px}
+.showroom-image-viewer-thumbs{max-width:min(92vw,1160px);overflow-x:auto}
+.showroom-image-close{position:fixed;right:22px;top:18px;z-index:2;width:48px;height:48px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(10,16,28,.72);color:#fff;font-size:34px;line-height:1;cursor:pointer;display:grid;place-items:center}
+.showroom-favourite-btn.active,.showroom-cart-btn.active{color:var(--primary);border-color:rgba(228,87,46,.28);background:rgba(228,87,46,.08)}
+@media(max-width:1100px){.showroom-featured-grid,.showroom-product-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:720px){.showroom-header-actions{gap:7px}.showroom-icon-btn{width:40px;height:40px}.showroom-product-image-wrap{height:120px}.showroom-detail-media-compact{height:330px;min-height:330px}.showroom-image-viewer-main{width:94vw;height:72dvh}.showroom-image-close{right:12px;top:10px;width:44px;height:44px}}
+@media(max-width:560px){.showroom-featured-grid,.showroom-product-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.showroom-product-image-wrap{height:118px}.showroom-card-actions{grid-template-columns:1fr;gap:5px}.showroom-card-action{padding:7px 5px}.showroom-guest-btn{padding:9px 10px}.showroom-search{width:auto}}
+@media(max-width:420px){.showroom-featured-grid,.showroom-product-grid{grid-template-columns:1fr}.showroom-product-image-wrap{height:165px}.showroom-card-actions{grid-template-columns:1fr 1fr}}

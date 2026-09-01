@@ -27,7 +27,14 @@ function ArrowIcon() {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" /></svg>;
 }
 
-function ShowroomHeader({ search, setSearch, onScan, onSignOut }) {
+function HeartIcon({ filled = false }) {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 8.7c0 5.1-8.8 10.1-8.8 10.1S3.2 13.8 3.2 8.7A4.7 4.7 0 0 1 12 6.2a4.7 4.7 0 0 1 8.8 2.5Z" fill={filled ? "currentColor" : "none"} /></svg>;
+}
+function CartIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h2l1.7 9.1a2 2 0 0 0 2 1.6h7.9a2 2 0 0 0 1.9-1.4L21 8H7"/><circle cx="10" cy="19" r="1.2"/><circle cx="18" cy="19" r="1.2"/></svg>;
+}
+
+function ShowroomHeader({ search, setSearch, onScan, onSignOut, favouriteCount = 0, cartCount = 0, onFavourites, onCart }) {
   return (
     <header className="showroom-header">
       <div className="showroom-brand-lockup">
@@ -43,26 +50,44 @@ function ShowroomHeader({ search, setSearch, onScan, onSignOut }) {
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search products…" aria-label="Search showroom products" />
         </div>
         <button className="showroom-scan-btn" type="button" onClick={onScan}><QrIcon /><span>Scan</span></button>
+        <button className="showroom-icon-btn" type="button" onClick={onFavourites} aria-label={`Favourites${favouriteCount ? `, ${favouriteCount} items` : ''}`} title="Favourites">
+          <HeartIcon filled={favouriteCount > 0} />
+          {favouriteCount > 0 && <span className="showroom-count-badge">{favouriteCount}</span>}
+        </button>
+        <button className="showroom-icon-btn" type="button" onClick={onCart} aria-label={`Cart${cartCount ? `, ${cartCount} items` : ''}`} title="Cart">
+          <CartIcon />
+          {cartCount > 0 && <span className="showroom-count-badge">{cartCount}</span>}
+        </button>
         <button className="showroom-guest-btn" type="button" onClick={onSignOut}>Guest</button>
       </div>
     </header>
   );
 }
 
-function ProductCard({ item, onOpen }) {
+function ProductCard({ item, onOpen, isFavourite, inCart, onToggleFavourite, onToggleCart }) {
   return (
-    <button type="button" className="showroom-product-card" onClick={() => onOpen(item)}>
-      <div className="showroom-product-image-wrap">
-        {getImage(item) ? <img src={getImage(item)} alt="" loading="lazy" /> : <div className="showroom-image-fallback">{String(item?.category || 'PRODUCT').slice(0, 1).toUpperCase()}</div>}
-        {item.featured && <span className="showroom-featured-pill">Featured</span>}
+    <article className="showroom-product-card">
+      <button type="button" className="showroom-product-card-main" onClick={() => onOpen(item)} aria-label={`View ${displayName(item)}`}>
+        <div className="showroom-product-image-wrap">
+          {getImage(item) ? <img src={getImage(item)} alt="" loading="lazy" /> : <div className="showroom-image-fallback">{String(item?.category || 'PRODUCT').slice(0, 1).toUpperCase()}</div>}
+          {item.featured && <span className="showroom-featured-pill">Featured</span>}
+        </div>
+        <div className="showroom-product-card-body">
+          <div className="showroom-product-category">{item.category || item.source_type}</div>
+          <h3>{displayName(item)}</h3>
+          <p>{[item.model, item.ean ? `EAN: ${item.ean}` : ''].filter(Boolean).join(' · ') || 'Product details'}</p>
+          <span className="showroom-view-link">View details <ArrowIcon /></span>
+        </div>
+      </button>
+      <div className="showroom-card-actions">
+        <button type="button" className={`showroom-card-action ${isFavourite ? 'active' : ''}`} onClick={() => onToggleFavourite(item)} aria-label={isFavourite ? 'Remove from favourites' : 'Add to favourites'}>
+          <HeartIcon filled={isFavourite} /> {isFavourite ? 'Favourited' : 'Favourite'}
+        </button>
+        <button type="button" className={`showroom-card-action ${inCart ? 'active' : ''}`} onClick={() => onToggleCart(item)} aria-label={inCart ? 'Remove from cart' : 'Add to cart'}>
+          <CartIcon /> {inCart ? 'In cart' : 'Add to cart'}
+        </button>
       </div>
-      <div className="showroom-product-card-body">
-        <div className="showroom-product-category">{item.category || item.source_type}</div>
-        <h3>{displayName(item)}</h3>
-        <p>{[item.model, item.article_no ? `SKU: ${item.article_no}` : '', item.ean ? `EAN: ${item.ean}` : ''].filter(Boolean).join(' · ') || 'Product details'}</p>
-        <span className="showroom-view-link">View details <ArrowIcon /></span>
-      </div>
-    </button>
+    </article>
   );
 }
 
@@ -71,7 +96,7 @@ function getGallery(item) {
   return [...new Set(candidates.filter(Boolean).map(String))];
 }
 
-function ProductDetail({ item, onBack, onScanAnother }) {
+function ProductDetail({ item, onBack, onScanAnother, isFavourite, inCart, onToggleFavourite, onToggleCart }) {
   const gallery = getGallery(item);
   const [imageOpen, setImageOpen] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
@@ -80,13 +105,17 @@ function ProductDetail({ item, onBack, onScanAnother }) {
   useEffect(() => {
     if (!imageOpen) return undefined;
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') setImageOpen(false);
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        setImageOpen(false);
+      }
     };
-    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keydown', onKeyDown, true);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
-      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('keydown', onKeyDown, true);
       document.body.style.overflow = previousOverflow;
     };
   }, [imageOpen]);
@@ -133,12 +162,11 @@ function ProductDetail({ item, onBack, onScanAnother }) {
             <div className="showroom-section-title">SKU details</div>
             <div className="showroom-sku-grid">
               {[
-                ['Article No.', item.article_no],
                 ['EAN', item.ean],
                 ['Model', item.model],
                 ['Category', item.category],
-              ].filter(([, value]) => value).map(([label, value]) => (
-                <div className="showroom-sku-item" key={label}><span>{label}</span><strong>{value}</strong></div>
+              ].map(([label, value]) => (
+                <div className="showroom-sku-item" key={label}><span>{label}</span><strong>{value || '—'}</strong></div>
               ))}
             </div>
           </section>
@@ -159,6 +187,8 @@ function ProductDetail({ item, onBack, onScanAnother }) {
           )}
 
           <div className="showroom-detail-actions">
+            <button type="button" className={`showroom-secondary-btn showroom-favourite-btn ${isFavourite ? 'active' : ''}`} onClick={() => onToggleFavourite(item)}><HeartIcon filled={isFavourite} /> {isFavourite ? 'Favourited' : 'Favourite'}</button>
+            <button type="button" className={`showroom-secondary-btn showroom-cart-btn ${inCart ? 'active' : ''}`} onClick={() => onToggleCart(item)}><CartIcon /> {inCart ? 'In cart' : 'Add to cart'}</button>
             <button type="button" className="showroom-secondary-btn" onClick={onScanAnother}><QrIcon /> Scan another product</button>
             <button type="button" className="showroom-primary-btn" onClick={onBack}>Back to showroom <ArrowIcon /></button>
           </div>
@@ -201,6 +231,17 @@ export default function GuestShowroom() {
   const [category, setCategory] = useState('All');
   const [selected, setSelected] = useState(null);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [collectionMode, setCollectionMode] = useState('all');
+  const [favourites, setFavourites] = useState(() => { try { return JSON.parse(localStorage.getItem('g-records-showroom-favourites') || '[]'); } catch { return []; } });
+  const [cart, setCart] = useState(() => { try { return JSON.parse(localStorage.getItem('g-records-showroom-cart') || '[]'); } catch { return []; } });
+
+  useEffect(() => { localStorage.setItem('g-records-showroom-favourites', JSON.stringify(favourites)); }, [favourites]);
+  useEffect(() => { localStorage.setItem('g-records-showroom-cart', JSON.stringify(cart)); }, [cart]);
+
+  const isFavourite = item => favourites.includes(item.id);
+  const inCart = item => cart.includes(item.id);
+  const toggleFavourite = item => setFavourites(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id]);
+  const toggleCart = item => setCart(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id]);
 
   const load = async () => {
     setLoading(true);
@@ -226,6 +267,19 @@ export default function GuestShowroom() {
     if (found) setSelected(found);
   }, [items]);
 
+  useEffect(() => {
+    const onKeyDown = event => {
+      if (event.key !== 'Escape') return;
+      if (scannerOpen) return;
+      if (selected) {
+        event.preventDefault();
+        setSelected(null);
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [selected, scannerOpen]);
+
   const categories = useMemo(() => {
     const values = [...new Set(items.map(x => String(x.category || '').trim()).filter(Boolean))];
     return ['All', ...values].length > 1 ? ['All', ...values] : CATEGORY_FALLBACK;
@@ -234,6 +288,8 @@ export default function GuestShowroom() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter(item => {
+      if (collectionMode === 'favourites' && !isFavourite(item)) return false;
+      if (collectionMode === 'cart' && !inCart(item)) return false;
       if (category !== 'All' && String(item.category || '') !== category) return false;
       if (!q) return true;
       return [item.name, item.brand, item.model, item.category, item.ean, item.article_no].filter(Boolean).some(v => String(v).toLowerCase().includes(q));
@@ -253,8 +309,8 @@ export default function GuestShowroom() {
   if (selected) {
     return (
       <div className="showroom-app showroom-app-detail">
-        <ShowroomHeader search={search} setSearch={setSearch} onScan={openScanner} onSignOut={signOut} />
-        <ProductDetail item={selected} onBack={() => setSelected(null)} onScanAnother={openScanner} />
+        <ShowroomHeader search={search} setSearch={value => { setSearch(value); setCollectionMode('all'); }} onScan={openScanner} onSignOut={signOut} favouriteCount={favourites.length} cartCount={cart.length} onFavourites={() => { setCollectionMode(collectionMode === 'favourites' ? 'all' : 'favourites'); setSearch(''); setCategory('All'); }} onCart={() => { setCollectionMode(collectionMode === 'cart' ? 'all' : 'cart'); setSearch(''); setCategory('All'); }} />
+        <ProductDetail item={selected} onBack={() => setSelected(null)} onScanAnother={openScanner} isFavourite={isFavourite(selected)} inCart={inCart(selected)} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} />
         {scannerOpen && <ScannerModal products={items} onScan={handleScan} onClose={() => setScannerOpen(false)} />}
       </div>
     );
@@ -262,7 +318,7 @@ export default function GuestShowroom() {
 
   return (
     <div className="showroom-app">
-      <ShowroomHeader search={search} setSearch={setSearch} onScan={openScanner} onSignOut={signOut} />
+      <ShowroomHeader search={search} setSearch={value => { setSearch(value); setCollectionMode('all'); }} onScan={openScanner} onSignOut={signOut} favouriteCount={favourites.length} cartCount={cart.length} onFavourites={() => { setCollectionMode(collectionMode === 'favourites' ? 'all' : 'favourites'); setSearch(''); setCategory('All'); }} onCart={() => { setCollectionMode(collectionMode === 'cart' ? 'all' : 'cart'); setSearch(''); setCategory('All'); }} />
       <main className="showroom-main">
         <section className="showroom-hero">
           <div>
@@ -280,18 +336,18 @@ export default function GuestShowroom() {
         {featured.length > 0 && (
           <section className="showroom-section-block">
             <div className="showroom-block-heading"><div><span>HANDPICKED</span><h2>Featured products</h2></div><button type="button" onClick={() => setSearch('')}>View all <ArrowIcon /></button></div>
-            <div className="showroom-featured-grid">{featured.map(item => <ProductCard key={item.id} item={item} onOpen={openItem} />)}</div>
+            <div className="showroom-featured-grid">{featured.map(item => <ProductCard key={item.id} item={item} onOpen={openItem} isFavourite={isFavourite(item)} inCart={inCart(item)} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} />)}</div>
           </section>
         )}
 
         <section className="showroom-section-block" id="showroom-collection">
-          <div className="showroom-block-heading"><div><span>COLLECTION</span><h2>Browse products</h2></div><div className="showroom-result-count">{loading ? 'Loading…' : `${filtered.length} products`}</div></div>
+          <div className="showroom-block-heading"><div><span>{collectionMode === 'favourites' ? 'YOUR SELECTION' : collectionMode === 'cart' ? 'YOUR CART' : 'COLLECTION'}</span><h2>{collectionMode === 'favourites' ? 'Favourite products' : collectionMode === 'cart' ? 'Cart' : 'Browse products'}</h2></div><div className="showroom-result-count">{loading ? 'Loading…' : `${filtered.length} products`}</div></div>
           <div className="showroom-category-row">
             {categories.map(cat => <button key={cat} type="button" className={category === cat ? 'active' : ''} onClick={() => setCategory(cat)}>{cat}</button>)}
           </div>
           {error && <div className="showroom-error">{error}<button type="button" onClick={load}>Retry</button></div>}
           {loading ? <div className="showroom-empty-state"><div className="showroom-loader"/><p>Loading showroom collection…</p></div>
-            : filtered.length ? <div className="showroom-product-grid">{filtered.map(item => <ProductCard key={item.id} item={item} onOpen={openItem} />)}</div>
+            : filtered.length ? <div className="showroom-product-grid">{filtered.map(item => <ProductCard key={item.id} item={item} onOpen={openItem} isFavourite={isFavourite(item)} inCart={inCart(item)} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} />)}</div>
             : <div className="showroom-empty-state"><div className="showroom-empty-icon">⌕</div><h3>No products found</h3><p>Try another search or category.</p></div>}
         </section>
       </main>

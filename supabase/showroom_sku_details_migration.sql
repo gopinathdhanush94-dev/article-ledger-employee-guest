@@ -4,6 +4,7 @@
 -- and keeps these fields synchronized when source product SKU data changes.
 
 alter table public.showroom_items
+  add column if not exists mrp numeric,
   add column if not exists sku_l numeric,
   add column if not exists sku_w numeric,
   add column if not exists sku_h numeric,
@@ -14,6 +15,7 @@ alter table public.showroom_items
 
 update public.showroom_items s
 set
+  mrp = p.mrp,
   sku_l = p.sku_l, sku_w = p.sku_w, sku_h = p.sku_h,
   sku_dim_unit = p.sku_dim_unit, sku_nw = p.sku_nw, sku_gw = p.sku_gw,
   sku_wt_unit = p.sku_wt_unit,
@@ -36,6 +38,7 @@ as $$
 begin
   update public.showroom_items
   set
+    mrp = new.mrp,
     sku_l = new.sku_l, sku_w = new.sku_w, sku_h = new.sku_h,
     sku_dim_unit = new.sku_dim_unit, sku_nw = new.sku_nw, sku_gw = new.sku_gw,
     sku_wt_unit = new.sku_wt_unit,
@@ -52,7 +55,7 @@ $$;
 
 drop trigger if exists trg_sync_product_showroom_sku on public.products;
 create trigger trg_sync_product_showroom_sku
-after insert or update of sku_l, sku_w, sku_h, sku_dim_unit, sku_nw, sku_gw, sku_wt_unit
+after insert or update of mrp, sku_l, sku_w, sku_h, sku_dim_unit, sku_nw, sku_gw, sku_wt_unit
 on public.products
 for each row execute function public.sync_product_showroom_sku();
 

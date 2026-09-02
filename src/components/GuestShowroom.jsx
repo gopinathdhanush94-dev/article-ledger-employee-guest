@@ -10,14 +10,11 @@ function getImage(item) {
 }
 
 function displayName(item) {
-  const candidates = [item?.name, item?.description, item?.model, item?.article_no];
-  for (const raw of candidates) {
-    const value = String(raw ?? '').trim();
-    if (!value) continue;
-    if (/^(untitled product|untitled article|article|product)$/i.test(value)) continue;
-    return value;
-  }
-  return 'Product';
+  const candidates = [item?.name, item?.description, item?.model, item?.article_no, item?.ean]
+    .map(value => String(value ?? '').trim())
+    .filter(Boolean);
+  const badNames = new Set(['untitled product', 'untitled', 'product details', 'article']);
+  return candidates.find(value => !badNames.has(value.toLowerCase())) || 'Product';
 }
 
 function productCode(item) {
@@ -127,327 +124,202 @@ function PopupShell({ title, eyebrow, onClose, children }) {
 }
 
 function createQuotationRequestPdf({ orderNumber, customerName, customerEmail, items, comments }) {
-  // Professional customer-facing quotation-request PDF. No prices/MRP are shown.
-  const sanitize = value => String(value ?? '')
+  // Customer-facing quotation request PDF. Deliberately excludes all pricing/MRP.
+  const clean = value => String(value ?? '')
     .replace(/[–—]/g, '-')
     .replace(/×/g, 'x')
     .replace(/₹/g, 'Rs')
-    .replace(/[\u0000-\u001F\u007F]/g, ' ')
-    .replace(/[^\x20-\x7E]/g, '');
+    .replace(/\r?\n/g, ' ')
+    .replace(/[^\x20-\x7E]/g, '')
+    .trim();
+  const safeName = item => {
+    const candidates = [item?.product_name, item?.name, item?.description, item?.model, item?.article_no, item?.ean]
+      .map(clean).filter(Boolean);
+    const badNames = new Set(['untitled product', 'untitled', 'product details', 'article']);
+    return candidates.find(v => !badNames.has(v.toLowerCase())) || 'Product';
+  };
+  const totalQuantity = items.reduce((sum, item) => sum + Math.max(1, Number(item.quantity) || 1), 0);
 
-  const wrap = (value, maxChars) => {
-    const text = sanitize(value).replace(/\s+/g, ' ').trim();
-    if (!text) return ['-'];
-    const words = text.split(' ');
+  const pageW = 595;
+  const pageH = 842;
+  const marginX = 36;
+  const contentW = pageW - marginX * 2;
+  const orange = [0.91, 0.27, 0.10];
+  const dark = [0.07, 0.11, 0.18];
+  const muted = [0.39, 0.47, 0.58];
+  const light = [0.96, 0.97, 0.98];
+  const border = [0.84, 0.87, 0.91];
+  const cols = [28, 250, 100, 55, 90]; // S.No, Description, EAN, Qty, Required
+  const encoder = new TextEncoder();
+  const fmt = n => Number(n).toFixed(3).replace(/\.000$/, '').replace(/(\.\d*?)0+$/, '$1');
+  const esc = value => clean(value).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  const textWidth = (text, fontSize) => clean(text).length * fontSize * 0.5;
+  const wrap = (text, maxChars) => {
+    const t = clean(text);
+    if (!t) return ['-'];
+    const words = t.split(/\s+/);
     const lines = [];
     let line = '';
     for (const word of words) {
       const next = line ? `${line} ${word}` : word;
-      if (next.length > maxChars && line) {
-        lines.push(line);
-        line = word;
-      } else {
-        line = next;
-      }
+      if (next.length > maxChars && line) { lines.push(line); line = word; }
+      else line = next;
     }
     if (line) lines.push(line);
-    return lines.length ? lines : ['-'];
+    return lines.slice(0, 3);
   };
 
-  const totalQuantity = items.reduce((sum, item) => sum + Math.max(1, Number(item.quantity) || 1), 0);
-  const normalizedItems = items.map((item, index) => ({
-    index: index + 1,
-    name: displayName(item),
-    ean: item.ean || '-',
-    quantity: Math.max(1, Number(item.quantity) || 1),
-    requiredDate: item.requiredDate || item.required_date || '-',
+  const rows = items.map((item, index) => ({
+    no: index + 1,
+    description: safeName(item),
+    ean: clean(item.ean) || '-',
+    qty: Math.max(1, Number(item.quantity) || 1),
+    required: clean(item.requiredDate || item.required_date) || '-',
   }));
 
-  const encoder = new TextEncoder();
-  const byteLength = value => encoder.encode(value).length;
-  const esc = value => sanitize(value).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
-
-  const pageW = 595;
-  const pageH = 842;
-  const margin = 42;
-  const contentW = pageW - margin * 2;
-  const cols = [
-    { label: 'S.No', width: 38 },
-    { label: 'Product description', width: 210 },
-    { label: 'EAN', width: 102 },
-    { label: 'Qty', width: 55 },
-    { label: 'Required date', width: 90 },
-  ];
-  const headerH = 26;
-  const rowMinH = 30;
-  const bottom = 70;
-  const topTable = 535;
-
-  const pageSpecs = [];
-  let current = [];
-  let usedH = 0;
-  const rowHeightFor = item => Math.max(rowMinH, wrap(item.name, 30).length * 11 + 15);
-  for (const item of normalizedItems) {
-    const h = rowHeightFor(item);
-    if (current.length && usedH + h > 430) {
-      pageSpecs.push(current);
-      current = [];
-      usedH = 0;
-    }
-    current.push(item);
-    usedH += h;
+  const chunks = [];
+  let chunk = [];
+  let estimated = 0;
+  for (const row of rows) {
+    const rowLines = wrap(row.description, 38).length;
+    const rowH = Math.max(28, 14 + rowLines * 11);
+    if (chunk.length && estimated + rowH > 490) { chunks.push(chunk); chunk = []; estimated = 0; }
+    chunk.push({ row, rowH }); estimated += rowH;
   }
-  if (current.length) pageSpecs.push(current);
-  if (!pageSpecs.length) pageSpecs.push([]);
+  if (chunk.length || !chunks.length) chunks.push(chunk);
 
   const pages = [];
-
-  function text(stream, x, y, value, font = 'F1', size = 10, color = '0 0 0') {
-    stream.push(`${color} rg`);
-    stream.push(`BT /${font} ${size} Tf ${x} ${y} Td (${esc(value)}) Tj ET`);
-  }
-  function line(stream, x1, y1, x2, y2, color = '0.82 0.85 0.89', width = 0.7) {
-    stream.push(`${color} RG ${width} w ${x1} ${y1} m ${x2} ${y2} l S`);
-  }
-  function rect(stream, x, y, w, h, fill = '1 1 1', stroke = null, radius = false) {
-    stream.push(`${fill} rg ${x} ${y} ${w} ${h} re f`);
-    if (stroke) stream.push(`${stroke} RG 0.7 w ${x} ${y} ${w} ${h} re S`);
-  }
-
-  pageSpecs.forEach((pageItems, pageIndex) => {
-    const stream = [];
-    // Header band
-    rect(stream, 0, 785, pageW, 57, '0.96 0.38 0.16');
-    text(stream, margin, 816, 'G-RECORDS', 'F2', 18, '1 1 1');
-    text(stream, margin, 798, 'SHOWROOM QUOTATION REQUEST', 'F1', 9, '1 1 1');
-    text(stream, pageW - margin - 95, 816, `REQUEST ${pageIndex + 1}/${pageSpecs.length}`, 'F2', 8, '1 1 1');
-
-    // Request meta box on first page
-    let y = 754;
-    if (pageIndex === 0) {
-      rect(stream, margin, y - 66, contentW, 66, '0.985 0.988 0.992', '0.86 0.88 0.91');
-      text(stream, margin + 12, y - 18, 'Quotation Request', 'F2', 12, '0.08 0.12 0.20');
-      text(stream, margin + 12, y - 37, `Request No: ${orderNumber}`, 'F1', 9.5, '0.25 0.31 0.40');
-      text(stream, margin + 12, y - 53, `Customer: ${customerName || 'Registered Guest'}`, 'F1', 9.5, '0.25 0.31 0.40');
-      text(stream, margin + 300, y - 37, `Email: ${customerEmail || '-'}`, 'F1', 9.5, '0.25 0.31 0.40');
-      text(stream, margin + 300, y - 53, `Requested items: ${normalizedItems.length}`, 'F1', 9.5, '0.25 0.31 0.40');
-      y -= 90;
-    } else {
-      text(stream, margin, y, `Request No: ${orderNumber}`, 'F1', 9.5, '0.25 0.31 0.40');
-      y -= 24;
+  const addText = (ops, x, y, size, value, color = dark, bold = false) => {
+    ops.push(`${fmt(color[0])} ${fmt(color[1])} ${fmt(color[2])} rg`);
+    ops.push('BT');
+    ops.push(`/${bold ? 'F2' : 'F1'} ${size} Tf`);
+    ops.push(`${fmt(x)} ${fmt(y)} Td`);
+    ops.push(`(${esc(value)}) Tj`);
+    ops.push('ET');
+  };
+  const rect = (ops, x, y, w, h, fill, stroke = null, lineW = 0.6) => {
+    if (fill) ops.push(`${fmt(fill[0])} ${fmt(fill[1])} ${fmt(fill[2])} rg`);
+    if (stroke) {
+      ops.push(`${fmt(stroke[0])} ${fmt(stroke[1])} ${fmt(stroke[2])} RG`);
+      ops.push(`${fmt(lineW)} w`);
     }
+    ops.push(`${fmt(x)} ${fmt(y)} ${fmt(w)} ${fmt(h)} re`);
+    ops.push(stroke ? (fill ? 'B' : 'S') : 'f');
+  };
+  const line = (ops, x1, y1, x2, y2, color = border, lineW = 0.6) => {
+    ops.push(`${fmt(color[0])} ${fmt(color[1])} ${fmt(color[2])} RG`);
+    ops.push(`${fmt(lineW)} w`);
+    ops.push(`${fmt(x1)} ${fmt(y1)} m ${fmt(x2)} ${fmt(y2)} l S`);
+  };
 
-    text(stream, margin, y, 'REQUESTED PRODUCTS', 'F2', 10, '0.96 0.25 0.09');
-    y -= 18;
+  chunks.forEach((pageRows, pageIndex) => {
+    const ops = [];
+    // Header
+    rect(ops, 0, pageH - 82, pageW, 82, [1, 1, 1]);
+    rect(ops, marginX, pageH - 58, 7, 29, orange);
+    addText(ops, marginX + 17, pageH - 42, 18, 'G-RECORDS', dark, true);
+    addText(ops, marginX + 17, pageH - 59, 8, 'PRODUCT SHOWROOM', orange, true);
+    addText(ops, pageW - marginX - 155, pageH - 40, 16, 'QUOTATION REQUEST', dark, true);
+    addText(ops, pageW - marginX - 155, pageH - 57, 8, `REQUEST ${orderNumber}`, muted, true);
+    line(ops, marginX, pageH - 82, pageW - marginX, pageH - 82, orange, 1.3);
 
-    // Table header
-    const tableX = margin;
-    let x = tableX;
-    rect(stream, tableX, y - headerH + 4, contentW, headerH, '0.10 0.14 0.22');
-    cols.forEach(col => {
-      text(stream, x + 7, y - 13, col.label, 'F2', 8.5, '1 1 1');
-      x += col.width;
-      line(stream, x, y - headerH + 4, x, y + 4, '0.32 0.36 0.43', 0.5);
+    // Customer summary block
+    let yTop = pageH - 108;
+    rect(ops, marginX, yTop - 48, contentW, 48, light);
+    addText(ops, marginX + 12, yTop - 18, 9, 'CUSTOMER', muted, true);
+    addText(ops, marginX + 68, yTop - 18, 10, customerName || 'Registered Guest', dark, true);
+    addText(ops, marginX + 12, yTop - 34, 9, 'EMAIL', muted, true);
+    addText(ops, marginX + 68, yTop - 34, 9, customerEmail || '-', dark);
+    addText(ops, pageW - marginX - 150, yTop - 18, 9, 'REQUEST DATE', muted, true);
+    addText(ops, pageW - marginX - 80, yTop - 18, 9, new Date().toLocaleDateString('en-IN'), dark);
+
+    // Table heading
+    let y = yTop - 69;
+    rect(ops, marginX, y - 25, contentW, 25, dark);
+    const headers = ['S.No', 'Product Description', 'EAN', 'Qty', 'Required Date'];
+    let x = marginX;
+    headers.forEach((h, i) => {
+      addText(ops, x + 7, y - 16, 8, h, [1, 1, 1], true);
+      x += cols[i];
     });
-    y -= headerH;
+    y -= 25;
 
-    pageItems.forEach((item) => {
-      const rowH = rowHeightFor(item);
-      if (item.index % 2 === 0) rect(stream, tableX, y - rowH + 3, contentW, rowH, '0.975 0.978 0.982');
-      line(stream, tableX, y - rowH + 3, tableX + contentW, y - rowH + 3, '0.84 0.86 0.89', 0.55);
-      const baselines = wrap(item.name, 30);
-      baselines.forEach((ln, i) => text(stream, tableX + 7 + cols[0].width, y - 14 - i * 11, ln, i === 0 ? 'F2' : 'F1', 8.7, '0.08 0.12 0.20'));
-      text(stream, tableX + 7, y - 14, String(item.index), 'F1', 8.7, '0.25 0.31 0.40');
-      text(stream, tableX + cols[0].width + cols[1].width + 7, y - 14, item.ean, 'F1', 8.3, '0.25 0.31 0.40');
-      text(stream, tableX + cols[0].width + cols[1].width + cols[2].width + 18, y - 14, String(item.quantity), 'F2', 9, '0.08 0.12 0.20');
-      text(stream, tableX + cols[0].width + cols[1].width + cols[2].width + cols[3].width + 7, y - 14, item.requiredDate, 'F1', 8.3, '0.25 0.31 0.40');
+    pageRows.forEach(({ row, rowH }, rIndex) => {
+      const fill = rIndex % 2 === 0 ? [1, 1, 1] : light;
+      rect(ops, marginX, y - rowH, contentW, rowH, fill, border);
+      let cx = marginX;
+      const descLines = wrap(row.description, 38);
+      addText(ops, cx + 7, y - 17, 8.5, row.no, dark, false); cx += cols[0];
+      descLines.forEach((t, li) => addText(ops, cx + 7, y - 16 - li * 11, 8.7, t, dark, li === 0)); cx += cols[1];
+      addText(ops, cx + 7, y - 17, 7.8, row.ean, dark); cx += cols[2];
+      addText(ops, cx + 9, y - 17, 9, row.qty, dark, true); cx += cols[3];
+      addText(ops, cx + 7, y - 17, 8, row.required, dark);
+      x = marginX;
+      for (const c of cols.slice(0, -1)) { x += c; line(ops, x, y, x, y - rowH, border, 0.5); }
       y -= rowH;
     });
 
-    // Footer on the page
-    line(stream, margin, bottom + 30, pageW - margin, bottom + 30, '0.82 0.84 0.88', 0.7);
-    text(stream, margin, bottom + 13, 'G-RECORDS Showroom', 'F2', 8.2, '0.25 0.31 0.40');
-    text(stream, pageW - margin - 80, bottom + 13, `Page ${pageIndex + 1}`, 'F1', 8.2, '0.40 0.45 0.52');
-    if (pageIndex === pageSpecs.length - 1) {
-      // Summary block and comments appear on final page
-      y -= 24;
-      rect(stream, margin, Math.max(110, y - 40), contentW, 40, '0.95 0.97 0.98');
-      text(stream, margin + 12, Math.max(125, y - 16), 'TOTAL QUANTITY', 'F2', 10, '0.08 0.12 0.20');
-      text(stream, pageW - margin - 45, Math.max(125, y - 16), `${totalQuantity} pcs`, 'F2', 11, '0.96 0.25 0.09');
-      const commentsY = Math.max(90, y - 64);
-      text(stream, margin, commentsY, 'CUSTOMER COMMENTS', 'F2', 9.5, '0.25 0.31 0.40');
-      const commentLines = wrap(comments || '-', 92).slice(0, 3);
-      commentLines.forEach((ln, i) => text(stream, margin, commentsY - 14 - i * 11, ln, 'F1', 8.8, '0.35 0.40 0.48'));
-      text(stream, margin, 52, 'Pricing and availability will be confirmed separately by G-RECORDS Accounts.', 'F1', 8.2, '0.40 0.45 0.52');
+    // Footer summary on final page only or each page summary
+    if (pageIndex === chunks.length - 1) {
+      y -= 18;
+      rect(ops, marginX, y - 42, contentW, 42, light, border);
+      addText(ops, marginX + 12, y - 17, 9, 'TOTAL PRODUCTS', muted, true);
+      addText(ops, marginX + 105, y - 17, 10, rows.length, dark, true);
+      addText(ops, pageW - marginX - 170, y - 17, 9, 'TOTAL QUANTITY', muted, true);
+      addText(ops, pageW - marginX - 65, y - 17, 11, `${totalQuantity} pcs`, dark, true);
+      y -= 58;
+      addText(ops, marginX, y, 9, 'CUSTOMER COMMENTS', orange, true);
+      const commentLines = wrap(comments || '-', 95);
+      commentLines.slice(0, 5).forEach((t, i) => addText(ops, marginX, y - 16 - i * 12, 9, t, dark));
+      y -= 82;
+      rect(ops, marginX, y - 48, contentW, 48, [1, 0.97, 0.95], null);
+      addText(ops, marginX + 12, y - 18, 8.5, 'PRICING & AVAILABILITY', orange, true);
+      addText(ops, marginX + 12, y - 33, 8.5, 'will be confirmed separately by G-RECORDS Accounts.', dark);
     }
 
-    stream.unshift('q', '1 0 0 1 0 0 cm');
-    stream.push('Q');
-    pages.push(stream.join('\n'));
+    // Page footer
+    addText(ops, marginX, 25, 7.5, 'G-RECORDS · Product Showroom · Customer quotation request', muted);
+    addText(ops, pageW - marginX - 55, 25, 7.5, `Page ${pageIndex + 1}/${chunks.length}`, muted);
+    pages.push(ops.join('\n'));
   });
 
-  const objects = [
-    '<< /Type /Catalog /Pages 2 0 R >>',
-    `<< /Type /Pages /Kids [${pages.map((_, i) => `${4 + i * 2} 0 R`).join(' ')}] /Count ${pages.length} >>`,
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>',
-  ];
+  // Build a valid PDF with page/content objects and Helvetica fonts.
+  const objects = [];
+  objects.push('<< /Type /Catalog /Pages 2 0 R >>');
+  objects.push('');
+  objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
+  const pageNums = [];
+  let objNo = 5;
+  pages.forEach(() => { pageNums.push(objNo); objNo += 2; });
+  objects[1] = `<< /Type /Pages /Kids [${pageNums.map(n => `${n} 0 R`).join(' ')}] /Count ${pages.length} >>`;
+  const allObjects = [objects[0], objects[1], objects[2], objects[3]];
   pages.forEach((stream, i) => {
-    const pageNo = 4 + i * 2;
-    const contentNo = pageNo + 1;
-    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentNo} 0 R >>`);
-    objects.push(`<< /Length ${byteLength(stream)} >>\nstream\n${stream}\nendstream`);
+    const pageObj = 5 + i * 2;
+    const contentObj = pageObj + 1;
+    const streamBytes = encoder.encode(stream).length;
+    allObjects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentObj} 0 R >>`);
+    allObjects.push(`<< /Length ${streamBytes} >>\nstream\n${stream}\nendstream`);
   });
-
   let pdf = '%PDF-1.4\n';
   const offsets = [0];
-  objects.forEach((obj, index) => {
-    offsets[index + 1] = byteLength(pdf);
-    pdf += `${index + 1} 0 obj\n${obj}\nendobj\n`;
+  allObjects.forEach((obj, i) => {
+    offsets[i + 1] = encoder.encode(pdf).length;
+    pdf += `${i + 1} 0 obj\n${obj}\nendobj\n`;
   });
-  const xrefOffset = byteLength(pdf);
-  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  for (let i = 1; i <= objects.length; i++) pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
-  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  const xref = encoder.encode(pdf).length;
+  pdf += `xref\n0 ${allObjects.length + 1}\n0000000000 65535 f \n`;
+  for (let i = 1; i <= allObjects.length; i++) pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${allObjects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
 
   const blob = new Blob([encoder.encode(pdf)], { type: 'application/pdf' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `G-Records-Quotation-Request-${sanitize(orderNumber)}.pdf`;
-  a.style.display = 'none';
+  a.download = `G-Records-Quotation-Request-${clean(orderNumber) || 'request'}.pdf`;
   document.body.appendChild(a);
   a.click();
   setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1500);
-}
-
-
-function formatOrderStatus(status) {
-  return String(status || 'quotation_requested')
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, c => c.toUpperCase());
-}
-
-function OrderHistoryPopup({ onClose, session }) {
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [expanded, setExpanded] = useState(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadHistory() {
-      setLoading(true);
-      setError('');
-      if (!session?.user?.id) {
-        setOrders([]);
-        setLoading(false);
-        return;
-      }
-      const { data, error: queryError } = await supabase
-        .from('showroom_orders')
-        .select(`
-          id,
-          order_number,
-          customer_name,
-          customer_email,
-          status,
-          comments,
-          submitted_at,
-          updated_at,
-          showroom_order_items (
-            id,
-            product_name,
-            ean,
-            quantity,
-            required_date,
-            availability,
-            quoted_unit_price,
-            account_note,
-            quoted_at
-          )
-        `)
-        .eq('customer_user_id', session.user.id)
-        .order('submitted_at', { ascending: false })
-        .limit(20);
-
-      if (cancelled) return;
-      if (queryError) {
-        setError(queryError.message || 'Unable to load order history.');
-      } else {
-        setOrders(data || []);
-      }
-      setLoading(false);
-    }
-
-    loadHistory();
-    return () => { cancelled = true; };
-  }, [session?.user?.id]);
-
-  return <PopupShell title="Order history" eyebrow="G-RECORDS · ORDERS" onClose={onClose}>
-    {loading ? (
-      <div className="showroom-empty-state showroom-history-loading"><div className="showroom-loader" /><p>Loading your recent orders…</p></div>
-    ) : error ? (
-      <div className="showroom-error">{error}<button type="button" onClick={() => window.location.reload()}>Retry</button></div>
-    ) : orders.length === 0 ? (
-      <div className="showroom-popup-empty">
-        <div className="showroom-popup-empty-icon"><OrderIcon /></div>
-        <h3>No quotation requests yet</h3>
-        <p>Your submitted quotation requests will appear here.</p>
-      </div>
-    ) : (
-      <div className="showroom-history-list">
-        {orders.map(order => {
-          const items = Array.isArray(order.showroom_order_items) ? order.showroom_order_items : [];
-          const totalQty = items.reduce((sum, item) => sum + Math.max(1, Number(item.quantity) || 1), 0);
-          const isOpen = expanded === order.id;
-          return (
-            <article className={`showroom-history-order ${isOpen ? 'is-open' : ''}`} key={order.id}>
-              <button type="button" className="showroom-history-order-head" onClick={() => setExpanded(isOpen ? null : order.id)}>
-                <div>
-                  <span className={`showroom-history-status status-${String(order.status || '').replace(/_/g, '-')}`}>{formatOrderStatus(order.status)}</span>
-                  <strong>{order.order_number}</strong>
-                  <small>{new Date(order.submitted_at).toLocaleString('en-IN')}</small>
-                </div>
-                <div className="showroom-history-summary">
-                  <span>{items.length} product{items.length === 1 ? '' : 's'}</span>
-                  <span>{totalQty} pcs</span>
-                  <span>{isOpen ? '−' : '+'}</span>
-                </div>
-              </button>
-
-              {isOpen && (
-                <div className="showroom-history-details">
-                  <div className="showroom-history-lines">
-                    {items.map(item => (
-                      <div className="showroom-history-line" key={item.id}>
-                        <div>
-                          <strong>{item.product_name || 'Product'}</strong>
-                          <small>{item.ean ? `EAN ${item.ean}` : 'No EAN'}</small>
-                        </div>
-                        <div className="showroom-history-line-meta">
-                          <span><b>Qty</b> {item.quantity}</span>
-                          <span><b>Required</b> {item.required_date || '—'}</span>
-                          <span><b>Availability</b> {item.availability || 'Pending'}</span>
-                          {item.quoted_unit_price != null && <span><b>Quoted</b> ₹{Number(item.quoted_unit_price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
-                        </div>
-                        {item.account_note && <div className="showroom-history-note">{item.account_note}</div>}
-                      </div>
-                    ))}
-                  </div>
-                  {order.comments && <div className="showroom-history-comment"><b>Comments</b><span>{order.comments}</span></div>}
-                  <div className="showroom-history-footer">
-                    <span>Last updated {new Date(order.updated_at || order.submitted_at).toLocaleString('en-IN')}</span>
-                    <span>{formatOrderStatus(order.status)}</span>
-                  </div>
-                </div>
-              )}
-            </article>
-          );
-        })}
-      </div>
-    )}
-  </PopupShell>;
 }
 
 function SelectionPopup({ mode, products, onClose, onOpen, isFavourite, inCart, onToggleFavourite, onToggleCart, cartQuantities, setCartQuantities, customerProfile, session }) {
@@ -485,7 +357,12 @@ function SelectionPopup({ mode, products, onClose, onOpen, isFavourite, inCart, 
     const items = selectedProducts.map(item => ({
       showroom_item_id: item.id,
       product_name: displayName(item),
+      name: item.name || null,
+      description: item.description || null,
+      model: item.model || null,
+      article_no: item.article_no || null,
       ean: item.ean || null,
+      category: item.category || null,
       quantity: Math.max(1, Math.floor(Number(cartQuantities[String(item.id)] || 1))),
       required_date: requiredDates[String(item.id)],
     }));

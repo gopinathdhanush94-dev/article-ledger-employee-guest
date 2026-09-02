@@ -33,11 +33,11 @@ function HeartIcon({ filled = false }) {
 function CartIcon() {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h2l1.7 9.1a2 2 0 0 0 2 1.6h7.9a2 2 0 0 0 1.9-1.4L21 8H7"/><circle cx="10" cy="19" r="1.2"/><circle cx="18" cy="19" r="1.2"/></svg>;
 }
-function OrdersIcon() {
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.8h10v16.4H7z"/><path d="M9.5 7.5h5M9.5 11.5h5M9.5 15.5h3"/></svg>;
+function OrderIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v5h4M9 12h6M9 16h6M9 8h3"/></svg>;
 }
 
-function ShowroomHeader({ search, setSearch, onScan, onSignOut, favouriteCount = 0, cartCount = 0, onFavourites, onCart, onOrders }) {
+function ShowroomHeader({ search, setSearch, onScan, onSignOut, favouriteCount = 0, cartCount = 0, onFavourites, onCart, onOrders, orderCount = 0 }) {
   const [guestMenuOpen, setGuestMenuOpen] = useState(false);
 
   // Close the Guest menu whenever the user clicks/taps anywhere outside it.
@@ -84,8 +84,9 @@ function ShowroomHeader({ search, setSearch, onScan, onSignOut, favouriteCount =
           <CartIcon />
           {cartCount > 0 && <span className="showroom-count-badge">{cartCount}</span>}
         </button>
-        <button className="showroom-icon-btn" type="button" onClick={onOrders} aria-label="Order history" title="Order history">
-          <OrdersIcon />
+        <button className="showroom-icon-btn" type="button" onClick={onOrders} aria-label={`Order history${orderCount ? `, ${orderCount} recent orders` : ''}`} title="Order history">
+          <OrderIcon />
+          {orderCount > 0 && <span className="showroom-count-badge">{orderCount > 9 ? '9+' : orderCount}</span>}
         </button>
         <div className="showroom-guest-menu-wrap">
           <button className="showroom-guest-btn" type="button" onClick={() => setGuestMenuOpen(open => !open)} aria-haspopup="menu" aria-expanded={guestMenuOpen}>Guest <span className="showroom-guest-chevron">⌄</span></button>
@@ -231,80 +232,148 @@ function createQuotationRequestPdf({ orderNumber, customerName, customerEmail, i
   setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1500);
 }
 
+
+function formatOrderStatus(status) {
+  return String(status || 'quotation_requested')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
 function OrderHistoryPopup({ onClose, session }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [openOrderId, setOpenOrderId] = useState(null);
+  const [expanded, setExpanded] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
-    async function loadOrders() {
-      if (!session?.user?.id) {
-        setLoading(false);
-        setError('Please sign in with your registered guest account to view order history.');
-        return;
-      }
+    async function loadHistory() {
       setLoading(true);
       setError('');
-      const { data, error: err } = await supabase
+      if (!session?.user?.id) {
+        setOrders([]);
+        setLoading(false);
+        return;
+      }
+      const { data, error: queryError } = await supabase
         .from('showroom_orders')
-        .select('id,order_number,status,comments,submitted_at,updated_at,showroom_order_items(id,product_name,ean,quantity,required_date,availability,quoted_unit_price,account_note)')
+        .select(`
+          id,
+          order_number,
+          customer_name,
+          customer_email,
+          status,
+          comments,
+          submitted_at,
+          updated_at,
+          showroom_order_items (
+            id,
+            product_name,
+            ean,
+            quantity,
+            required_date,
+            availability,
+            quoted_unit_price,
+            account_note,
+            quoted_at
+          )
+        `)
         .eq('customer_user_id', session.user.id)
         .order('submitted_at', { ascending: false })
-        .limit(25);
+        .limit(20);
+
       if (cancelled) return;
-      if (err) setError(err.message || 'Unable to load order history.');
-      else setOrders(data || []);
+      if (queryError) {
+        setError(queryError.message || 'Unable to load order history.');
+      } else {
+        setOrders(data || []);
+      }
       setLoading(false);
     }
-    loadOrders();
+
+    loadHistory();
     return () => { cancelled = true; };
   }, [session?.user?.id]);
 
-  const formatDate = value => value ? new Date(value).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
-  const formatRequiredDate = value => value ? new Date(`${value}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
-  const totalQty = order => (order.showroom_order_items || []).reduce((sum, item) => sum + Math.max(1, Number(item.quantity) || 1), 0);
-  const statusLabel = value => String(value || 'quotation_requested').replace(/_/g, ' ');
-
-  return <PopupShell title="Order history" eyebrow="G-RECORDS" onClose={onClose}>
-    {loading ? <div className="showroom-empty-state"><div className="showroom-loader"/><p>Loading recent orders…</p></div> : error ? <div className="showroom-error">{error}</div> : orders.length === 0 ? <div className="showroom-popup-empty"><div className="showroom-popup-empty-icon"><OrdersIcon /></div><h3>No orders yet</h3><p>Your submitted quotation requests will appear here.</p></div> : <>
-      <div className="showroom-popup-subtitle">Your latest quotation requests</div>
-      <div className="showroom-order-history-list">
+  return <PopupShell title="Order history" eyebrow="G-RECORDS · ORDERS" onClose={onClose}>
+    {loading ? (
+      <div className="showroom-empty-state showroom-history-loading"><div className="showroom-loader" /><p>Loading your recent orders…</p></div>
+    ) : error ? (
+      <div className="showroom-error">{error}<button type="button" onClick={() => window.location.reload()}>Retry</button></div>
+    ) : orders.length === 0 ? (
+      <div className="showroom-popup-empty">
+        <div className="showroom-popup-empty-icon"><OrderIcon /></div>
+        <h3>No quotation requests yet</h3>
+        <p>Your submitted quotation requests will appear here.</p>
+      </div>
+    ) : (
+      <div className="showroom-history-list">
         {orders.map(order => {
-          const expanded = openOrderId === order.id;
-          return <article className={`showroom-history-card ${expanded ? 'expanded' : ''}`} key={order.id}>
-            <button type="button" className="showroom-history-head" onClick={() => setOpenOrderId(expanded ? null : order.id)} aria-expanded={expanded}>
-              <div><span className="showroom-detail-kicker">{statusLabel(order.status)}</span><h3>{order.order_number}</h3><p>{formatDate(order.submitted_at)}</p></div>
-              <div className="showroom-history-summary"><strong>{totalQty(order)} pcs</strong><span>{(order.showroom_order_items || []).length} products</span><span>{expanded ? '−' : '+'}</span></div>
-            </button>
-            {expanded && <div className="showroom-history-details">
-              {(order.showroom_order_items || []).map(item => <div className="showroom-history-line" key={item.id}>
-                <div><strong>{item.product_name}</strong><span>{item.ean || 'No EAN'}</span></div>
-                <div><span>Qty {item.quantity}</span><span>Required {formatRequiredDate(item.required_date)}</span></div>
-                <div className="showroom-history-status">{item.availability ? <span>{item.availability}</span> : <span>Awaiting quotation</span>}{item.quoted_unit_price != null && <span>Quoted price: ₹{Number(item.quoted_unit_price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}</div>
-              </div>)}
-              {order.comments && <div className="showroom-order-comment"><b>Your comments:</b> {order.comments}</div>}
-              {order.updated_at && <div className="showroom-history-updated">Last updated {formatDate(order.updated_at)}</div>}
-            </div>}
-          </article>;
+          const items = Array.isArray(order.showroom_order_items) ? order.showroom_order_items : [];
+          const totalQty = items.reduce((sum, item) => sum + Math.max(1, Number(item.quantity) || 1), 0);
+          const isOpen = expanded === order.id;
+          return (
+            <article className={`showroom-history-order ${isOpen ? 'is-open' : ''}`} key={order.id}>
+              <button type="button" className="showroom-history-order-head" onClick={() => setExpanded(isOpen ? null : order.id)}>
+                <div>
+                  <span className={`showroom-history-status status-${String(order.status || '').replace(/_/g, '-')}`}>{formatOrderStatus(order.status)}</span>
+                  <strong>{order.order_number}</strong>
+                  <small>{new Date(order.submitted_at).toLocaleString('en-IN')}</small>
+                </div>
+                <div className="showroom-history-summary">
+                  <span>{items.length} product{items.length === 1 ? '' : 's'}</span>
+                  <span>{totalQty} pcs</span>
+                  <span>{isOpen ? '−' : '+'}</span>
+                </div>
+              </button>
+
+              {isOpen && (
+                <div className="showroom-history-details">
+                  <div className="showroom-history-lines">
+                    {items.map(item => (
+                      <div className="showroom-history-line" key={item.id}>
+                        <div>
+                          <strong>{item.product_name || 'Product'}</strong>
+                          <small>{item.ean ? `EAN ${item.ean}` : 'No EAN'}</small>
+                        </div>
+                        <div className="showroom-history-line-meta">
+                          <span><b>Qty</b> {item.quantity}</span>
+                          <span><b>Required</b> {item.required_date || '—'}</span>
+                          <span><b>Availability</b> {item.availability || 'Pending'}</span>
+                          {item.quoted_unit_price != null && <span><b>Quoted</b> ₹{Number(item.quoted_unit_price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
+                        </div>
+                        {item.account_note && <div className="showroom-history-note">{item.account_note}</div>}
+                      </div>
+                    ))}
+                  </div>
+                  {order.comments && <div className="showroom-history-comment"><b>Comments</b><span>{order.comments}</span></div>}
+                  <div className="showroom-history-footer">
+                    <span>Last updated {new Date(order.updated_at || order.submitted_at).toLocaleString('en-IN')}</span>
+                    <span>{formatOrderStatus(order.status)}</span>
+                  </div>
+                </div>
+              )}
+            </article>
+          );
         })}
       </div>
-    </>}
+    )}
   </PopupShell>;
 }
 
 function SelectionPopup({ mode, products, onClose, onOpen, isFavourite, inCart, onToggleFavourite, onToggleCart, cartQuantities, setCartQuantities, customerProfile, session }) {
   const isCart = mode === 'cart';
-  const [comments, setComments] = useState('');
+  const [comments, setComments] = useState(() => { try { return localStorage.getItem('g-records-showroom-order-comments') || ''; } catch { return ''; } });
   const [requiredDates, setRequiredDates] = useState(() => { try { return JSON.parse(localStorage.getItem('g-records-showroom-required-dates') || '{}'); } catch { return {}; } });
-  const [preview, setPreview] = useState(false);
+  const [preview, setPreview] = useState(() => { try { return localStorage.getItem('g-records-showroom-order-preview') === '1'; } catch { return false; } });
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitted, setSubmitted] = useState(null);
   const selectedProducts = products.filter(item => isCart ? inCart(item) : isFavourite(item));
   const updateQty = (id, value) => setCartQuantities(current => ({ ...current, [String(id)]: Math.max(1, Math.floor(Number(value) || 1)) }));
   const updateRequiredDate = (id, value) => setRequiredDates(current => { const next = { ...current, [String(id)]: value }; localStorage.setItem('g-records-showroom-required-dates', JSON.stringify(next)); return next; });
+  useEffect(() => { try { localStorage.setItem('g-records-showroom-order-comments', comments); } catch {} }, [comments]);
+  useEffect(() => { try { localStorage.setItem('g-records-showroom-order-preview', preview ? '1' : '0'); } catch {} }, [preview]);
 
   async function submitOrder() {
     if (!selectedProducts.length) return;
@@ -370,6 +439,12 @@ function SelectionPopup({ mode, products, onClose, onOpen, isFavourite, inCart, 
     setSubmitted(orderNumber);
     setSubmitting(false);
     setCart([]);
+    try {
+      localStorage.removeItem('g-records-showroom-cart');
+      localStorage.removeItem('g-records-showroom-order-comments');
+      localStorage.removeItem('g-records-showroom-order-preview');
+      localStorage.removeItem('g-records-showroom-required-dates');
+    } catch {}
   }
 
   // Keep a local empty-cart setter without mutating the parent's source of truth
@@ -600,11 +675,21 @@ export default function GuestShowroom() {
   const [category, setCategory] = useState('All');
   const [selected, setSelected] = useState(null);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [orderHistoryOpen, setOrderHistoryOpen] = useState(false);
   const [collectionMode, setCollectionMode] = useState('all');
   const [favourites, setFavourites] = useState(() => { try { return JSON.parse(localStorage.getItem('g-records-showroom-favourites') || '[]'); } catch { return []; } });
   const [cart, setCart] = useState(() => { try { return JSON.parse(localStorage.getItem('g-records-showroom-cart') || '[]'); } catch { return []; } });
   const [cartQuantities, setCartQuantities] = useState(() => { try { return JSON.parse(localStorage.getItem('g-records-showroom-cart-quantities') || '{}'); } catch { return {}; } });
-  const [popup, setPopup] = useState(null);
+  const [popup, setPopup] = useState(() => {
+    try { return localStorage.getItem('g-records-showroom-popup') || null; } catch { return null; }
+  });
+
+  useEffect(() => {
+    try {
+      if (popup) localStorage.setItem('g-records-showroom-popup', popup);
+      else localStorage.removeItem('g-records-showroom-popup');
+    } catch {}
+  }, [popup]);
 
   useEffect(() => { localStorage.setItem('g-records-showroom-favourites', JSON.stringify(favourites)); }, [favourites]);
   useEffect(() => { localStorage.setItem('g-records-showroom-cart', JSON.stringify(cart)); }, [cart]);
@@ -629,6 +714,8 @@ export default function GuestShowroom() {
       return Object.keys(next).length === Object.keys(current).length ? current : next;
     });
   }, [items]);
+
+  const [recentOrderCount, setRecentOrderCount] = useState(0);
 
   const favouriteCount = useMemo(() => {
     const validIds = new Set(items.map(item => String(item.id)));
@@ -664,6 +751,19 @@ export default function GuestShowroom() {
   };
 
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    async function loadRecentOrderCount() {
+      if (!session?.user?.id) { setRecentOrderCount(0); return; }
+      const { count, error: historyError } = await supabase
+        .from('showroom_orders')
+        .select('id', { count: 'exact', head: true })
+        .eq('customer_user_id', session.user.id);
+      if (!cancelled) setRecentOrderCount(historyError ? 0 : Number(count || 0));
+    }
+    loadRecentOrderCount();
+    return () => { cancelled = true; };
+  }, [session?.user?.id]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -716,17 +816,17 @@ export default function GuestShowroom() {
   if (selected) {
     return (
       <div className="showroom-app showroom-app-detail">
-        <ShowroomHeader search={search} setSearch={value => { setSearch(value); setCollectionMode('all'); }} onScan={openScanner} onSignOut={signOut} favouriteCount={favouriteCount} cartCount={cartCount} onFavourites={() => setPopup('favourites')} onCart={() => setPopup('cart')} onOrders={() => setPopup('orders')} />
+        <ShowroomHeader search={search} setSearch={value => { setSearch(value); setCollectionMode('all'); }} onScan={openScanner} onSignOut={signOut} favouriteCount={favouriteCount} cartCount={cartCount} onFavourites={() => setPopup('favourites')} onCart={() => setPopup('cart')} onOrders={() => setOrderHistoryOpen(true)} orderCount={recentOrderCount} />
         <ProductDetail item={selected} onBack={() => setSelected(null)} onScanAnother={openScanner} isFavourite={isFavourite(selected)} inCart={inCart(selected)} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} />
         {scannerOpen && <ScannerModal products={items} onScan={handleScan} onClose={() => setScannerOpen(false)} />}
-        {popup === 'orders' ? <OrderHistoryPopup onClose={() => setPopup(null)} session={session} /> : popup && <SelectionPopup mode={popup} products={items} onClose={() => setPopup(null)} onOpen={openItem} isFavourite={isFavourite} inCart={inCart} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} cartQuantities={cartQuantities} setCartQuantities={setCartQuantities} customerProfile={profile} session={session} />}
+        {orderHistoryOpen && <OrderHistoryPopup onClose={() => setOrderHistoryOpen(false)} session={session} />}\n        {orderHistoryOpen && <OrderHistoryPopup onClose={() => setOrderHistoryOpen(false)} session={session} />}\n      {popup && <SelectionPopup mode={popup} products={items} onClose={() => setPopup(null)} onOpen={openItem} isFavourite={isFavourite} inCart={inCart} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} cartQuantities={cartQuantities} setCartQuantities={setCartQuantities} customerProfile={profile} session={session} />}
       </div>
     );
   }
 
   return (
     <div className="showroom-app">
-      <ShowroomHeader search={search} setSearch={value => { setSearch(value); setCollectionMode('all'); }} onScan={openScanner} onSignOut={signOut} favouriteCount={favouriteCount} cartCount={cartCount} onFavourites={() => setPopup('favourites')} onCart={() => setPopup('cart')} onOrders={() => setPopup('orders')} />
+      <ShowroomHeader search={search} setSearch={value => { setSearch(value); setCollectionMode('all'); }} onScan={openScanner} onSignOut={signOut} favouriteCount={favouriteCount} cartCount={cartCount} onFavourites={() => setPopup('favourites')} onCart={() => setPopup('cart')} onOrders={() => setOrderHistoryOpen(true)} orderCount={recentOrderCount} />
       <main className="showroom-main">
         <section className="showroom-hero">
           <div>
@@ -761,7 +861,7 @@ export default function GuestShowroom() {
       </main>
       <footer className="showroom-footer"><div>G-Records · Product Showroom</div><div>Guest access · Public product information only</div></footer>
       {scannerOpen && <ScannerModal products={items} onScan={handleScan} onClose={() => setScannerOpen(false)} />}
-      {popup === 'orders' ? <OrderHistoryPopup onClose={() => setPopup(null)} session={session} /> : popup && <SelectionPopup mode={popup} products={items} onClose={() => setPopup(null)} onOpen={openItem} isFavourite={isFavourite} inCart={inCart} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} cartQuantities={cartQuantities} setCartQuantities={setCartQuantities} customerProfile={profile} session={session} />}
+      {orderHistoryOpen && <OrderHistoryPopup onClose={() => setOrderHistoryOpen(false)} session={session} />}\n      {popup && <SelectionPopup mode={popup} products={items} onClose={() => setPopup(null)} onOpen={openItem} isFavourite={isFavourite} inCart={inCart} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} cartQuantities={cartQuantities} setCartQuantities={setCartQuantities} customerProfile={profile} session={session} />}
     </div>
   );
 }

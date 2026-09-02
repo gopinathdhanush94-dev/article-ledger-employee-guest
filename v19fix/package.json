@@ -1,0 +1,36 @@
+{
+  "name": "article-ledger",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "migrate": "node scripts/migrate.mjs",
+    "migrate-garments": "node scripts/migrate_garments.mjs",
+    "migrate-2024-2025": "node scripts/migrate_2024_2025.mjs",
+    "undo-2024-2025": "node scripts/undo_migrate_2024_2025.mjs",
+    "undo-original-garments": "node scripts/undo_original_garments.mjs",
+    "reimport": "node scripts/reimport.mjs",
+    "reimport-garments": "node scripts/reimport_garments.mjs",
+    "wipe-and-reload-products": "node scripts/wipe_and_reload_products.mjs",
+    "restore-products-backup": "node scripts/restore_products_backup.mjs",
+    "sync-artical-all": "node scripts/sync_artical_all.mjs",
+    "reconcile-artical-all": "node scripts/reconcile_artical_all.mjs",
+    "normalize-months": "node scripts/normalize_existing_months.mjs",
+    "sync-showroom-sku": "node scripts/sync_showroom_sku.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "@zxing/browser": "^0.1.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "dotenv": "^16.4.5",
+    "vite": "^5.4.0"
+  }
+}

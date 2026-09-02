@@ -1096,3 +1096,6 @@
     padding: 6px 8px;
   }
 }
+
+/* Quotation authorization + simplified pricing workflow */
+.showroom-quotation-access-denied{padding:32px;max-width:720px;margin:30px auto}.showroom-quotation-access-denied h2{margin:0 0 8px}.showroom-quotation-access-denied p{margin:0;color:#71839b}.showroom-delete-btn{border-color:#f0b8ad;color:#b42318;background:#fff7f5}.showroom-delete-btn:hover{background:#fff0ec}

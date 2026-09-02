@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../supabaseClient.js';
 
 const ROLE_PERMISSIONS = {
-  super_admin: { canView: true, canAdd: true, canEdit: true, canDelete: true, canHistory: true, canDataQuality: true, canManageUsers: true },
-  admin:       { canView: true, canAdd: true, canEdit: true, canDelete: true, canHistory: true, canDataQuality: true, canManageUsers: true },
-  editor:      { canView: true, canAdd: true, canEdit: true, canDelete: false, canHistory: true, canDataQuality: true, canManageUsers: false },
-  viewer:      { canView: true, canAdd: false, canEdit: false, canDelete: false, canHistory: true, canDataQuality: false, canManageUsers: false },
-  guest:       { canView: false, canAdd: false, canEdit: false, canDelete: false, canHistory: false, canDataQuality: false, canManageUsers: false },
+  super_admin:      { canView: true, canAdd: true, canEdit: true, canDelete: true,  canHistory: true, canDataQuality: true,  canManageUsers: true,  canManageQuotations: true },
+  admin:            { canView: true, canAdd: true, canEdit: true, canDelete: true,  canHistory: true, canDataQuality: true,  canManageUsers: true,  canManageQuotations: true },
+  quotation_manager:{ canView: true, canAdd: false,canEdit: false,canDelete: false, canHistory: true, canDataQuality: false, canManageUsers: false, canManageQuotations: true },
+  editor:           { canView: true, canAdd: true, canEdit: true, canDelete: false, canHistory: true, canDataQuality: true,  canManageUsers: false, canManageQuotations: false },
+  viewer:           { canView: true, canAdd: false,canEdit: false,canDelete: false, canHistory: true, canDataQuality: false, canManageUsers: false, canManageQuotations: false },
+  guest:            { canView: false,canAdd: false,canEdit: false,canDelete: false, canHistory: false,canDataQuality: false, canManageUsers: false, canManageQuotations: false },
 };
 
 const DEFAULT_PERMISSIONS = ROLE_PERMISSIONS.viewer;

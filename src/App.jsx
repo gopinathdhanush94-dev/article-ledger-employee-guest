@@ -322,7 +322,7 @@ function AppInner() {
           <button className={view === 'garments' ? 'active' : ''} onClick={() => { setGarmentFilters(null); navigate('garments'); }}>Garments</button>
           {permissions.canAdd && <button className={(view === 'add-product' || view === 'add-garment') ? 'active' : ''} onClick={openAddChoice}>+ Add Product</button>}
           {isEmployee && <button className={view === 'showroom' ? 'active' : ''} onClick={() => navigate('showroom')}>Showroom</button>}
-          {isEmployee && <button className={view === 'showroom-orders' ? 'active' : ''} onClick={() => navigate('showroom-orders')}>Quotation Requests</button>}
+          {permissions.canManageQuotations && <button className={view === 'showroom-orders' ? 'active' : ''} onClick={() => navigate('showroom-orders')}>Quotation Requests</button>}
         </nav>
       </header>
 
@@ -396,7 +396,7 @@ function AppInner() {
             <ShowroomManager canEdit={permissions.canEdit} canDelete={permissions.canDelete} />
           </div>
           <div style={{ display: view === 'showroom-orders' ? 'block' : 'none' }}>
-            <ShowroomOrders />
+            <ShowroomOrders canManageQuotations={permissions.canManageQuotations} />
           </div>
           <div style={{ display: view === 'add-garment' ? 'block' : 'none' }}>
             <GarmentForm

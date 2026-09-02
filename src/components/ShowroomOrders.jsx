@@ -4,7 +4,7 @@ import { createQuotationRequestPdf } from '../lib/quotationPdf.js';
 
 const money = value => `₹${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export default function ShowroomOrders() {
+export default function ShowroomOrders({ canManageQuotations = false }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -13,6 +13,7 @@ export default function ShowroomOrders() {
   const [filter, setFilter] = useState('all');
 
   async function load() {
+    if (!canManageQuotations) return;
     setLoading(true); setError('');
     const { data, error: err } = await supabase
       .from('showroom_orders')
@@ -21,7 +22,7 @@ export default function ShowroomOrders() {
     if (err) setError(err.message); else setOrders(data || []);
     setLoading(false);
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [canManageQuotations]);
 
   const filtered = useMemo(() => filter === 'all' ? orders : orders.filter(o => o.status === filter), [orders, filter]);
 
@@ -57,6 +58,19 @@ export default function ShowroomOrders() {
     setSaving(null);
   }
 
+  async function deleteQuotation(order) {
+    const confirmed = window.confirm(`Delete quotation ${order.order_number}?\n\nThis will permanently remove the quotation request and its selected articles. This cannot be undone.`);
+    if (!confirmed) return;
+    setSaving(`delete:${order.id}`); setError(''); setMessage('');
+    const { error: err } = await supabase.from('showroom_orders').delete().eq('id', order.id);
+    if (err) setError(err.message);
+    else {
+      setOrders(current => current.filter(o => o.id !== order.id));
+      setMessage(`${order.order_number} was deleted.`);
+    }
+    setSaving(null);
+  }
+
   function downloadQuotation(order) {
     const items = (order.showroom_order_items || []).map(item => ({
       product_name: item.product_name,
@@ -77,13 +91,17 @@ export default function ShowroomOrders() {
     });
   }
 
+  if (!canManageQuotations) {
+    return <main className="admin-page showroom-orders-page"><div className="panel glass-panel showroom-quotation-access-denied"><h2>Quotation Requests</h2><p>Your account is not authorized to view or edit quotation requests.</p></div></main>;
+  }
+
   return <main className="admin-page showroom-orders-page">
     <div className="page-heading">
-      <div><span className="eyebrow">SHOWROOM</span><h2>Quotation Requests</h2><p>Submitted showroom requests stay inside Article Ledger. Review each line, enter availability and pricing, mark the quotation ready, then download the PDF for manual sharing.</p></div>
+      <div><span className="eyebrow">SHOWROOM</span><h2>Quotation Requests</h2><p>Review guest requests, enter availability and pricing, mark the quotation ready, then download the PDF for manual sharing.</p></div>
       <button className="btn" onClick={load}>Refresh</button>
     </div>
     <div className="showroom-order-filters">
-      {['all','quotation_requested','pricing_in_progress','quoted','completed'].map(s => <button key={s} className={filter === s ? 'active' : ''} onClick={() => setFilter(s)}>{s === 'all' ? 'All' : s.replace(/_/g, ' ')}</button>)}
+      {['all','quotation_requested','quoted','completed'].map(s => <button key={s} className={filter === s ? 'active' : ''} onClick={() => setFilter(s)}>{s === 'all' ? 'All' : s.replace(/_/g, ' ')}</button>)}
     </div>
     {error && <div className="showroom-error">{error}</div>}
     {message && <div className="showroom-success">{message}</div>}
@@ -93,18 +111,14 @@ export default function ShowroomOrders() {
         const ready = items.length > 0 && items.every(i => i.quoted_unit_price != null && Number(i.quoted_unit_price) >= 0 && i.availability);
         const totalQty = items.reduce((s, i) => s + Number(i.quantity || 0), 0);
         const total = items.reduce((s, i) => s + Number(i.quantity || 0) * Number(i.quoted_unit_price || 0), 0);
+        const isDeleting = saving === `delete:${order.id}`;
         return <section className="panel glass-panel showroom-order-card" key={order.id}>
           <div className="showroom-order-card-head">
             <div><span className="showroom-detail-kicker">{String(order.status || '').replace(/_/g, ' ')}</span><h3>{order.order_number}</h3><p>{order.customer_name || 'Guest'} · {order.customer_email} · {new Date(order.submitted_at).toLocaleString('en-IN')}</p></div>
             <div className="showroom-order-head-actions">
-              {order.status !== 'quoted' && <button className="btn" onClick={async () => {
-                setSaving(order.id); setError('');
-                const { error: err } = await supabase.from('showroom_orders').update({ status: 'pricing_in_progress' }).eq('id', order.id);
-                if (err) setError(err.message); else setOrders(current => current.map(o => o.id === order.id ? { ...o, status: 'pricing_in_progress' } : o));
-                setSaving(null);
-              }} disabled={saving === order.id}>Start pricing</button>}
-              {order.status !== 'quoted' && <button className="btn btn-primary" disabled={!ready || saving === order.id} onClick={() => markQuotationReady(order)}>{saving === order.id ? 'Saving…' : 'Mark quotation ready'}</button>}
+              {order.status !== 'quoted' && <button className="btn btn-primary" disabled={!ready || saving === order.id || isDeleting} onClick={() => markQuotationReady(order)}>{saving === order.id ? 'Saving…' : 'Mark quotation ready'}</button>}
               {order.status === 'quoted' && <button className="btn btn-primary" onClick={() => downloadQuotation(order)}>↓ Download quotation PDF</button>}
+              <button className="btn showroom-delete-btn" disabled={isDeleting} onClick={() => deleteQuotation(order)}>{isDeleting ? 'Deleting…' : 'Delete quotation'}</button>
             </div>
           </div>
           <div className="showroom-order-table">
@@ -112,10 +126,10 @@ export default function ShowroomOrders() {
             {items.map(item => <div className="showroom-order-table-row" key={item.id}>
               <div><strong>{item.product_name || 'Product'}</strong><small>{item.ean || 'No EAN'}</small></div>
               <span>{item.quantity}</span><span>{item.required_date || '—'}</span>
-              <select value={item.availability || ''} onChange={e => updateItem(order.id,item.id,'availability',e.target.value)} disabled={saving === item.id}><option value="">Pending</option><option>Available</option><option>Partially available</option><option>Out of stock</option><option>Discontinued</option></select>
-              <input type="number" min="0" step="0.01" placeholder="Enter price" value={item.quoted_unit_price ?? ''} onChange={e => updateItem(order.id,item.id,'quoted_unit_price',e.target.value)} disabled={saving === item.id}/>
+              <select value={item.availability || ''} onChange={e => updateItem(order.id,item.id,'availability',e.target.value)} disabled={saving === item.id || order.status === 'quoted'}><option value="">Pending</option><option>Available</option><option>Partially available</option><option>Out of stock</option><option>Discontinued</option></select>
+              <input type="number" min="0" step="0.01" placeholder="Enter price" value={item.quoted_unit_price ?? ''} onChange={e => updateItem(order.id,item.id,'quoted_unit_price',e.target.value)} disabled={saving === item.id || order.status === 'quoted'}/>
               <strong className="showroom-admin-line-total">{item.quoted_unit_price == null ? '—' : money(Number(item.quantity || 0) * Number(item.quoted_unit_price || 0))}</strong>
-              <input placeholder="Note" value={item.account_note || ''} onChange={e => updateItem(order.id,item.id,'account_note',e.target.value)} disabled={saving === item.id}/>
+              <input placeholder="Note" value={item.account_note || ''} onChange={e => updateItem(order.id,item.id,'account_note',e.target.value)} disabled={saving === item.id || order.status === 'quoted'}/>
             </div>)}
           </div>
           <div className="showroom-order-total"><span>Total quantity <b>{totalQty}</b></span><span>Total quotation value <strong>{ready ? money(total) : 'Pending pricing'}</strong></span></div>

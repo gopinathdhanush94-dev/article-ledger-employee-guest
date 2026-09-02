@@ -71,7 +71,7 @@ export default function ShowroomManager({ canEdit = false }) {
         .filter(Boolean)
         .some(v => String(v).toLowerCase().includes(q));
     });
-  }, [items, search, type, visibility]);
+  }, [items, search, type, visibility, category]);
 
   async function updateItem(id, patch) {
     if (!canEdit) return;
@@ -90,18 +90,38 @@ export default function ShowroomManager({ canEdit = false }) {
     setBusyId(null);
   }
 
+  // Supabase/PostgREST can reject very large .in() requests with a browser
+  // "Failed to fetch" before the request even reaches the database. Keep
+  // bulk updates in small chunks so category-wide actions work for thousands
+  // of showroom rows.
+  async function bulkUpdateByIds(ids, patch) {
+    const chunkSize = 100;
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const chunk = ids.slice(i, i + chunkSize);
+      const { error: err } = await supabase
+        .from('showroom_items')
+        .update(patch)
+        .in('id', chunk);
+      if (err) throw err;
+    }
+  }
+
   async function setAllVisible(nextVisible) {
     if (!canEdit || !filtered.length) return;
     setBulkBusy(true);
     setError('');
     const ids = filtered.map(item => item.id);
-    const { error: err } = await supabase
-      .from('showroom_items')
-      .update({ visible: nextVisible, ...(nextVisible ? {} : { featured: false }) })
-      .in('id', ids);
-    if (err) setError(err.message || 'Could not update showroom items');
-    else setItems(prev => prev.map(item => ids.includes(item.id) ? { ...item, visible: nextVisible, ...(nextVisible ? {} : { featured: false }) } : item));
-    setBulkBusy(false);
+    try {
+      await bulkUpdateByIds(ids, { visible: nextVisible, ...(nextVisible ? {} : { featured: false }) });
+      const idSet = new Set(ids);
+      setItems(prev => prev.map(item => idSet.has(item.id)
+        ? { ...item, visible: nextVisible, ...(nextVisible ? {} : { featured: false }) }
+        : item));
+    } catch (err) {
+      setError(err?.message || 'Could not update showroom items');
+    } finally {
+      setBulkBusy(false);
+    }
   }
 
   async function setAllFeatured(nextFeatured) {
@@ -110,13 +130,15 @@ export default function ShowroomManager({ canEdit = false }) {
     setError('');
     const ids = filtered.filter(item => nextFeatured ? item.visible : true).map(item => item.id);
     if (!ids.length) { setBulkBusy(false); return; }
-    const { error: err } = await supabase
-      .from('showroom_items')
-      .update({ featured: nextFeatured })
-      .in('id', ids);
-    if (err) setError(err.message || 'Could not update featured items');
-    else setItems(prev => prev.map(item => ids.includes(item.id) ? { ...item, featured: nextFeatured } : item));
-    setBulkBusy(false);
+    try {
+      await bulkUpdateByIds(ids, { featured: nextFeatured });
+      const idSet = new Set(ids);
+      setItems(prev => prev.map(item => idSet.has(item.id) ? { ...item, featured: nextFeatured } : item));
+    } catch (err) {
+      setError(err?.message || 'Could not update featured items');
+    } finally {
+      setBulkBusy(false);
+    }
   }
 
   return (

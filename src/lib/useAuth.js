@@ -54,7 +54,7 @@ export function useAuth() {
       }
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, sess) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, sess) => {
       if (!mounted) return;
       setSession(sess || null);
       if (!sess) {
@@ -62,14 +62,31 @@ export function useAuth() {
         if (initialised) setLoading(false);
         return;
       }
+
+      // TOKEN_REFRESHED happens when the browser tab becomes active again.
+      // Do NOT put the whole app back into the loading gate for a token
+      // refresh: doing so temporarily unmounts GuestShowroom/AppInner,
+      // which resets their local navigation state (and can send employees
+      // back to Home). The existing profile remains valid during a token
+      // refresh, so keep the current UI mounted.
+      if (event === 'TOKEN_REFRESHED') {
+        setLoading(false);
+        return;
+      }
+
       // Keep the access gate in a loading state while the guest/employee
-      // profile is being fetched. This prevents a valid guest login from
-      // briefly rendering the "profile not ready" screen.
-      setLoading(true);
-      Promise.resolve().then(async () => {
-        await loadProfile(sess.user.id);
-        if (mounted) setLoading(false);
-      });
+      // profile is being fetched after an actual sign-in or account change.
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
+        setLoading(true);
+        Promise.resolve().then(async () => {
+          await loadProfile(sess.user.id);
+          if (mounted) setLoading(false);
+        });
+        return;
+      }
+
+      // For other authenticated events, preserve the current screen.
+      setLoading(false);
     });
 
     return () => {

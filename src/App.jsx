@@ -86,10 +86,26 @@ function AppInner() {
   // ---------------- browser back/forward support ----------------
   const isPopRef = useRef(false);
   useEffect(() => {
-    window.history.replaceState({ view: 'home' }, '', '#home');
+    // Preserve the current route if AppInner is remounted (for example after
+    // auth/profile state recovery when a backgrounded tab becomes active).
+    // Previously this always replaced the URL with #home, which made a tab
+    // opened on Showroom/Quotations jump back to Home after re-mounting.
+    const allowedViews = new Set([
+      'home', 'catalog', 'garments', 'add-product', 'add-garment',
+      'showroom', 'showroom-orders'
+    ]);
+    const currentHash = window.location.hash.replace(/^#/, '');
+    const initialView = allowedViews.has(currentHash) ? currentHash : 'home';
+    const currentState = window.history.state;
+    if (!currentState || currentState.view !== initialView) {
+      window.history.replaceState({ ...(currentState || {}), view: initialView }, '', '#' + initialView);
+    }
+    setViewState(initialView);
+
     function onPop(e) {
       isPopRef.current = true;
-      setViewState(e.state?.view || 'home');
+      const nextView = allowedViews.has(e.state?.view) ? e.state.view : 'home';
+      setViewState(nextView);
     }
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);

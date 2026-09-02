@@ -86,17 +86,10 @@ function AppInner() {
   // ---------------- browser back/forward support ----------------
   const isPopRef = useRef(false);
   useEffect(() => {
-    // Preserve the current hash when AppInner mounts again (for example after
-    // a real sign-in/profile transition). Never overwrite an existing route
-    // such as #showroom with #home during a remount.
-    const currentHash = window.location.hash.replace(/^#/, '');
-    const initialView = currentHash || 'home';
-    setViewState(initialView);
-    window.history.replaceState({ view: initialView }, '', '#' + initialView);
-
+    window.history.replaceState({ view: 'home' }, '', '#home');
     function onPop(e) {
       isPopRef.current = true;
-      setViewState(e.state?.view || window.location.hash.replace(/^#/, '') || 'home');
+      setViewState(e.state?.view || 'home');
     }
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);

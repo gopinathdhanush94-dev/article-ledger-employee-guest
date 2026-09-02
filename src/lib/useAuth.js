@@ -90,27 +90,17 @@ export function useAuth() {
       }
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((event, sess) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, sess) => {
       if (!mounted) return;
       setSession(sess || null);
-
-      // Supabase emits TOKEN_REFRESHED when the browser tab becomes active
-      // and the access token is refreshed. This is NOT a new login and must
-      // never put the access gate back into its loading/unmount state. Doing
-      // so remounts AppInner/GuestShowroom and resets the current screen.
-      if (event === 'TOKEN_REFRESHED') return;
-
       if (!sess) {
         setProfile(null);
         if (initialised) setLoading(false);
         return;
       }
-
-      // Only authentication/profile-changing events need a profile refresh.
-      // Keep the UI mounted during background auth activity.
-      const shouldReloadProfile = event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION';
-      if (!shouldReloadProfile) return;
-
+      // Keep the access gate in a loading state while the guest/employee
+      // profile is being fetched. This prevents a valid guest login from
+      // briefly rendering the "profile not ready" screen.
       setLoading(true);
       Promise.resolve().then(async () => {
         await loadProfile(sess.user.id);

@@ -13,6 +13,7 @@ export default function ShowroomOrders({ canManageQuotations = false }) {
   const [filter, setFilter] = useState('all');
   const [priceDrafts, setPriceDrafts] = useState({});
   const [noteDrafts, setNoteDrafts] = useState({});
+  const [editingQuoted, setEditingQuoted] = useState({});
 
   async function load() {
     if (!canManageQuotations) return;
@@ -34,6 +35,11 @@ export default function ShowroomOrders({ canManageQuotations = false }) {
 
   function patchLocal(orderId, itemId, patch) {
     setOrders(current => current.map(o => o.id !== orderId ? o : ({ ...o, showroom_order_items: (o.showroom_order_items || []).map(i => i.id !== itemId ? i : ({ ...i, ...patch })) })));
+  }
+
+  function toggleQuotedRevision(orderId) {
+    setEditingQuoted(current => ({ ...current, [orderId]: !current[orderId] }));
+    setError(''); setMessage('');
   }
 
   async function updateItem(orderId, itemId, field, value) {
@@ -130,7 +136,10 @@ export default function ShowroomOrders({ canManageQuotations = false }) {
             <div><span className="showroom-detail-kicker">{order.status === 'quoted' ? 'Quoted' : 'Quotation Requested'}</span><h3>{order.order_number}</h3><p>{order.customer_name || 'Guest'} · {order.customer_email} · {new Date(order.submitted_at).toLocaleString('en-IN')}</p></div>
             <div className="showroom-order-head-actions">
               {order.status !== 'quoted' && <button className="btn btn-primary" disabled={!ready || saving === order.id || isDeleting} onClick={() => markQuotationReady(order)}>{saving === order.id ? 'Saving…' : 'Mark quotation ready'}</button>}
-              {order.status === 'quoted' && <button className="btn btn-primary" onClick={() => downloadQuotation(order)}>↓ Download quotation PDF</button>}
+              {order.status === 'quoted' && <>
+                <button className="btn" onClick={() => toggleQuotedRevision(order.id)} disabled={saving === order.id || isDeleting}>{editingQuoted[order.id] ? 'Cancel revision' : 'Revise quotation'}</button>
+                <button className="btn btn-primary" onClick={() => downloadQuotation(order)}>↓ Download quotation PDF</button>
+              </>}
               <button className="btn showroom-delete-btn" disabled={isDeleting} onClick={() => deleteQuotation(order)}>{isDeleting ? 'Deleting…' : 'Delete quotation'}</button>
             </div>
           </div>
@@ -139,12 +148,23 @@ export default function ShowroomOrders({ canManageQuotations = false }) {
             {items.map(item => <div className="showroom-order-table-row" key={item.id}>
               <div><strong>{item.product_name || 'Product'}</strong><small>{item.ean || 'No EAN'}</small></div>
               <span>{item.quantity}</span><span>{item.required_date || '—'}</span>
-              <select value={item.availability || ''} onChange={e => updateItem(order.id,item.id,'availability',e.target.value)} disabled={saving === item.id || order.status === 'quoted'}><option value="">Pending</option><option>Available</option><option>Partially available</option><option>Out of stock</option><option>Discontinued</option></select>
-              <input type="number" min="0" step="0.01" inputMode="decimal" placeholder="Enter price" value={priceDrafts[item.id] ?? (item.quoted_unit_price ?? '')} onChange={e => setPriceDraft(item.id, e.target.value)} onBlur={e => updateItem(order.id,item.id,'quoted_unit_price',e.target.value)} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }} disabled={saving === item.id || order.status === 'quoted'}/>
+              <select value={item.availability || ''} onChange={e => updateItem(order.id,item.id,'availability',e.target.value)} disabled={saving === item.id || (order.status === 'quoted' && !editingQuoted[order.id])}><option value="">Pending</option><option>Available</option><option>Partially available</option><option>Out of stock</option><option>Discontinued</option></select>
+              <input type="number" min="0" step="0.01" inputMode="decimal" placeholder="Enter price" value={priceDrafts[item.id] ?? (item.quoted_unit_price ?? '')} onChange={e => setPriceDraft(item.id, e.target.value)} onBlur={e => updateItem(order.id,item.id,'quoted_unit_price',e.target.value)} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }} disabled={saving === item.id || (order.status === 'quoted' && !editingQuoted[order.id])}/>
               <strong className="showroom-admin-line-total">{(priceDrafts[item.id] ?? item.quoted_unit_price) == null || (priceDrafts[item.id] ?? item.quoted_unit_price) === '' ? '—' : money(Number(item.quantity || 0) * Number(priceDrafts[item.id] ?? item.quoted_unit_price))}</strong>
-              <input placeholder="Quotation note" value={noteDrafts[item.id] ?? (item.account_note || '')} onChange={e => setNoteDrafts(current => ({ ...current, [item.id]: e.target.value }))} onBlur={e => updateItem(order.id,item.id,'account_note',e.target.value)} disabled={saving === item.id || order.status === 'quoted'}/>
+              <input placeholder="Quotation note" value={noteDrafts[item.id] ?? (item.account_note || '')} onChange={e => setNoteDrafts(current => ({ ...current, [item.id]: e.target.value }))} onBlur={e => updateItem(order.id,item.id,'account_note',e.target.value)} disabled={saving === item.id || (order.status === 'quoted' && !editingQuoted[order.id])}/>
             </div>)}
           </div>
+          {order.status === 'quoted' && editingQuoted[order.id] && <div className="showroom-quotation-revision-bar">
+            <span>Revision mode: update price, availability or quotation notes, then save the revised quotation.</span>
+            <button className="btn btn-primary" disabled={saving === order.id || !ready} onClick={async () => {
+              setSaving(order.id); setError(''); setMessage('');
+              const now = new Date().toISOString();
+              const { error: err } = await supabase.from('showroom_orders').update({ status: 'quoted', quoted_at: now, updated_at: now }).eq('id', order.id);
+              if (err) setError(err.message);
+              else { setEditingQuoted(current => ({ ...current, [order.id]: false })); setOrders(current => current.map(o => o.id === order.id ? { ...o, quoted_at: now, updated_at: now } : o)); setMessage(`${order.order_number} revised successfully. Download the updated quotation PDF.`); }
+              setSaving(null);
+            }}>Save revision</button>
+          </div>}
           <div className="showroom-order-total"><span>Total quantity <b>{totalQty}</b></span><span>Total quotation value <strong>{ready ? money(total) : 'Pending pricing'}</strong></span></div>
           {order.comments && <p className="showroom-order-comment"><b>Customer comments:</b> {order.comments}</p>}
           <div className="showroom-order-meta-line"><span>Customer contact: {order.customer_email || 'Not available'}</span><span>{order.quoted_at ? `Ready: ${new Date(order.quoted_at).toLocaleString('en-IN')}` : 'Quotation not ready'}</span></div>

@@ -1099,3 +1099,9 @@
 
 /* Quotation authorization + simplified pricing workflow */
 .showroom-quotation-access-denied{padding:32px;max-width:720px;margin:30px auto}.showroom-quotation-access-denied h2{margin:0 0 8px}.showroom-quotation-access-denied p{margin:0;color:#71839b}.showroom-delete-btn{border-color:#f0b8ad;color:#b42318;background:#fff7f5}.showroom-delete-btn:hover{background:#fff0ec}
+
+/* Quotation revision controls */
+.showroom-quotation-revision-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;border-top:1px solid var(--border,#e4e8ee);border-bottom:1px solid var(--border,#e4e8ee);background:rgba(242,246,248,.65);font-size:13px;color:#65748b}
+.showroom-quotation-revision-bar .btn{flex:0 0 auto;white-space:nowrap}
+.showroom-delete-btn{border-color:#efc8c0;color:#c6533d}
+@media (max-width: 760px){.showroom-quotation-revision-bar{align-items:stretch;flex-direction:column;gap:10px}.showroom-quotation-revision-bar .btn{width:100%}}

@@ -706,15 +706,30 @@ export default function GuestShowroom() {
 
   const load = async () => {
     setLoading(true);
-    const { data, error: err } = await supabase
-      .from('showroom_items')
-      .select('id,source_type,ean,article_no,name,brand,model,category,description,image_url,features,dimensions,sku_l,sku_w,sku_h,sku_dim_unit,sku_nw,sku_gw,sku_wt_unit,featured,visible')
-      .eq('visible', true)
-      .order('featured', { ascending: false })
-      .order('created_at', { ascending: false });
-    if (err) setError(err.message || 'Unable to load showroom products');
-    else setItems(data || []);
-    setLoading(false);
+    setError('');
+    const pageSize = 1000;
+    const all = [];
+    let from = 0;
+    try {
+      while (true) {
+        const { data, error: err } = await supabase
+          .from('showroom_items')
+          .select('id,source_type,ean,article_no,name,brand,model,category,description,image_url,features,dimensions,sku_l,sku_w,sku_h,sku_dim_unit,sku_nw,sku_gw,sku_wt_unit,featured,visible,created_at')
+          .eq('visible', true)
+          .order('featured', { ascending: false })
+          .order('created_at', { ascending: false })
+          .range(from, from + pageSize - 1);
+        if (err) throw err;
+        all.push(...(data || []));
+        if (!data || data.length < pageSize) break;
+        from += pageSize;
+      }
+      setItems(all);
+    } catch (err) {
+      setError(err?.message || 'Unable to load showroom products');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { load(); }, []);

@@ -22,15 +22,29 @@ export default function ShowroomManager({ canEdit = false, canDelete = false }) 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
-    const { data, error: err } = await supabase
-      .from('showroom_items')
-      .select('id,source_type,source_id,ean,article_no,name,brand,model,category,description,image_url,features,dimensions,featured,visible,created_at,updated_at')
-      .order('featured', { ascending: false })
-      .order('visible', { ascending: false })
-      .order('created_at', { ascending: false });
-    if (err) setError(err.message || 'Unable to load showroom items');
-    else setItems(data || []);
-    setLoading(false);
+    const pageSize = 1000;
+    const all = [];
+    let from = 0;
+    try {
+      while (true) {
+        const { data, error: err } = await supabase
+          .from('showroom_items')
+          .select('id,source_type,source_id,ean,article_no,name,brand,model,category,description,image_url,features,dimensions,featured,visible,created_at,updated_at')
+          .order('featured', { ascending: false })
+          .order('visible', { ascending: false })
+          .order('created_at', { ascending: false })
+          .range(from, from + pageSize - 1);
+        if (err) throw err;
+        all.push(...(data || []));
+        if (!data || data.length < pageSize) break;
+        from += pageSize;
+      }
+      setItems(all);
+    } catch (err) {
+      setError(err?.message || 'Unable to load showroom items');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);

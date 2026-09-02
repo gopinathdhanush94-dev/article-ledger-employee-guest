@@ -17,3 +17,6 @@ This is a source patch for the existing Article Ledger project.
 
 ## Important security note
 This is the first-stage UI/authentication gate only. Before exposing guest showroom data, create a server-side role/profile table and Supabase RLS policies. Do not use user metadata alone as the security boundary for internal data.
+
+## Quotation email policy
+Quotation requests are handled entirely inside the webapp. No automatic quotation email is sent. Employees download the final quotation PDF from Employee Access and share it manually.

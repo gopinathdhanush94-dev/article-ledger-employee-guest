@@ -9,7 +9,7 @@ function normalize(value) {
   return String(value ?? '').trim().toLowerCase().replace(/\s+/g, '');
 }
 
-export default function ScannerModal({ onClose, onScan, products }) {
+export default function ScannerModal({ onClose, onScan, products, lookupCode }) {
   const videoRef = useRef(null);
   const controlsRef = useRef(null);
   const inputRef = useRef(null);
@@ -107,21 +107,30 @@ export default function ScannerModal({ onClose, onScan, products }) {
     return null;
   };
 
-  const handleValue = (value) => {
+  const handleValue = async (value) => {
     const raw = String(value || '').trim();
     if (!raw || scanLockRef.current) return false;
 
-    const product = findProduct(raw);
+    // Stop decoding while we do the server-side fallback lookup. This matters
+    // on mobile because a barcode may decode repeatedly before the database
+    // lookup has completed.
+    scanLockRef.current = true;
+    stopCamera();
+    setNotFound('');
+    setStatus('Checking Article Ledger…');
+
+    let product = findProduct(raw);
+    if (!product && lookupCode) {
+      try { product = await lookupCode(raw); } catch (_) { product = null; }
+    }
+
     if (product) {
-      scanLockRef.current = true;
-      stopCamera();
       onScan(product);
       return true;
     }
 
-    // Unknown code: show the exact scanned value and temporarily stop decoding
-    // so the same barcode does not repeatedly trigger the popup.
-    stopCamera();
+    // Unknown code: show the exact scanned value.
+    scanLockRef.current = false;
     setNotFound(raw);
     setStatus('');
     return false;
@@ -233,7 +242,7 @@ export default function ScannerModal({ onClose, onScan, products }) {
     const value = e.target.value;
     setReaderValue(value);
     const compact = value.replace(/\s+/g, '');
-    if (/^\d{8,14}$/.test(compact) && findProduct(compact)) handleValue(compact);
+    if (/^\d{8,14}$/.test(compact)) handleValue(compact);
   };
 
   const close = () => {

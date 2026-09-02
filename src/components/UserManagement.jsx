@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient.js';
 
-const ROLE_OPTIONS = ['viewer', 'editor', 'admin', 'super_admin'];
+const ROLE_OPTIONS = ['viewer', 'editor', 'quotation_manager', 'admin', 'super_admin'];
 const STATUS_OPTIONS = ['active', 'pending', 'disabled'];
 
 function labelRole(role) {
-  return role === 'super_admin' ? 'Super Admin' : role.charAt(0).toUpperCase() + role.slice(1);
+  return role === 'super_admin' ? 'Super Admin' : role === 'quotation_manager' ? 'Quotation Manager' : role.charAt(0).toUpperCase() + role.slice(1);
 }
 
 export default function UserManagement({ open, onClose, currentProfile }) {

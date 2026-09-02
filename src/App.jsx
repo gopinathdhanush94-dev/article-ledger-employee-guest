@@ -324,7 +324,7 @@ function AppInner() {
             </button>}
             {isAuthed ? (
               <>
-                <span className="who">Signed in · {role === 'super_admin' ? 'Super Admin' : role === 'admin' ? 'Admin' : role === 'editor' ? 'Editor' : 'Viewer'}</span>
+                <span className="who">Signed in · {role === 'super_admin' ? 'Super Admin' : role === 'admin' ? 'Admin' : role === 'editor' ? 'Editor' : role === 'quotation_manager' ? 'Quotation Manager' : 'Viewer'}</span>
                 <button className="btn" onClick={signOut}>Sign out</button>
               </>
             ) : (

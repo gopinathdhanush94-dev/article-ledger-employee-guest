@@ -163,7 +163,7 @@ export function createQuotationRequestPdf({ orderNumber, customerName, customerE
   if (top + 60 > 780) pushPage();
   rect(M, top, U, 44, [255,247,243]);
   bold('NEXT STEP', M+10, top+16, 7.8, ORANGE);
-  text(includePricing ? 'Pricing and availability confirmed by G-RECORDS Accounts.', M+10, top+32, 9, MUTED);
+  text(includePricing ? 'Pricing and availability confirmed by G-RECORDS Accounts.' : 'Quotation request received. Our team will confirm pricing and availability.', M+10, top+32, 9, MUTED);
   footer();
   pages.push(ops.join('\n'));
 

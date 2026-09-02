@@ -307,3 +307,22 @@
   .showroom-history-line-meta{justify-content:flex-start}
   .showroom-history-footer{flex-direction:column}
 }
+
+/* Order history: stable popup layout + download action */
+.showroom-history-order-head{display:flex;align-items:stretch;justify-content:space-between;gap:12px;padding:0!important;border:0!important;background:transparent!important}
+.showroom-history-order-toggle{flex:1;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:16px;border:0;background:transparent;padding:16px 18px;text-align:left;cursor:pointer;color:inherit}
+.showroom-history-order-toggle>div:first-child{min-width:0;display:flex;flex-direction:column;gap:3px}
+.showroom-history-order-toggle strong{font-size:15px;overflow-wrap:anywhere}
+.showroom-history-order-toggle small{color:var(--text-muted);font-size:11px}
+.showroom-history-summary{display:flex;align-items:center;gap:12px;flex:0 0 auto;color:var(--text-soft);font-size:11px}
+.showroom-history-download{align-self:center;margin-right:12px;border:1px solid rgba(228,87,46,.26);background:rgba(228,87,46,.07);color:var(--primary);border-radius:10px;padding:9px 11px;font:inherit;font-weight:800;cursor:pointer;white-space:nowrap}
+.showroom-history-download:hover{background:rgba(228,87,46,.12)}
+.showroom-history-download-link{border:0;background:transparent;color:var(--primary);font:inherit;font-weight:800;cursor:pointer;padding:4px 0}
+.showroom-history-download-link:hover{text-decoration:underline}
+@media(max-width:560px){
+  .showroom-history-order-head{align-items:center}
+  .showroom-history-order-toggle{padding:14px 12px;gap:8px}
+  .showroom-history-summary{gap:7px}
+  .showroom-history-summary span:nth-child(1){display:none}
+  .showroom-history-download{margin-right:8px;padding:8px 9px;font-size:11px}
+}

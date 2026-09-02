@@ -125,218 +125,202 @@ function PopupShell({ title, eyebrow, onClose, children }) {
 }
 
 function createQuotationRequestPdf({ orderNumber, customerName, customerEmail, items, comments }) {
-  const sanitize = value => String(value ?? '')
-    .replace(/[\u2013\u2014]/g, '-')
+  // Dependency-free A4 PDF generator.  This intentionally contains customer-safe
+  // request information only: no MRP, selling price, discounts or internal pricing.
+  const encoder = new TextEncoder();
+  const esc = value => String(value ?? '')
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .replace(/[–—]/g, '-')
     .replace(/×/g, 'x')
     .replace(/₹/g, 'Rs')
-    .replace(/[^\x20-\x7E]/g, '');
-
+    .replace(/[^\x20-\x7E]/g, '')
+    .replace(/\\/g, '\\\\')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)');
+  const plain = value => String(value ?? '')
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .replace(/[–—]/g, '-')
+    .replace(/×/g, 'x')
+    .replace(/₹/g, 'Rs')
+    .replace(/[^\x20-\x7E]/g, '')
+    .trim();
   const cleanName = item => {
     const candidates = [item?.description, item?.product_name, item?.name, item?.model, item?.article_no, item?.ean ? `Product ${item.ean}` : ''];
-    const value = candidates.find(v => {
-      const t = sanitize(v).trim();
-      return t && !/^untitled product$/i.test(t) && !/^untitled$/i.test(t);
-    });
-    return value ? sanitize(value).trim() : 'Product';
+    return candidates.map(plain).find(v => v && !/^untitled(?: product)?$/i.test(v)) || 'Product';
   };
   const wrap = (value, width) => {
-    const text = sanitize(value || '').trim();
+    const text = plain(value);
     if (!text) return [''];
     const words = text.split(/\s+/);
     const lines = [];
     let line = '';
     for (const word of words) {
-      const next = line ? `${line} ${word}` : word;
-      if (next.length <= width) line = next;
-      else if (line) { lines.push(line); line = word; }
-      else { lines.push(word.slice(0, width)); line = word.slice(width); }
+      if (!line) line = word;
+      else if (`${line} ${word}`.length <= width) line += ` ${word}`;
+      else { lines.push(line); line = word; }
     }
     if (line) lines.push(line);
     return lines;
   };
   const fmtDate = value => {
-    if (!value) return '-';
-    const text = sanitize(value);
-    const m = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    return m ? `${m[3]}-${m[2]}-${m[1]}` : text;
+    const raw = plain(value);
+    const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m ? `${m[3]}-${m[2]}-${m[1]}` : (raw || '-');
   };
-  const fmtNumber = n => Math.max(1, Number(n) || 1).toLocaleString('en-IN');
-  const totalQuantity = items.reduce((sum, item) => sum + Math.max(1, Number(item.quantity) || 1), 0);
+  const fmtQty = n => Math.max(1, Number(n) || 1).toLocaleString('en-IN');
+  const totalQty = items.reduce((sum, item) => sum + Math.max(1, Number(item.quantity) || 1), 0);
 
-  // A4 landscape-independent coordinate system: 595 x 842 points.
-  const W = 595, H = 842;
-  const margin = 36;
-  const usable = W - margin * 2;
-  const encoder = new TextEncoder();
-  const byteLength = value => encoder.encode(value).length;
-  const pdfText = value => sanitize(value).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
-  const rgb = (r,g,b) => `${r} ${g} ${b}`;
-  const ops = [];
-
-  function rect(x, y, w, h, fill) {
-    ops.push(`${rgb(...fill)} rg ${x} ${y} ${w} ${h} re f`);
+  const W = 595, H = 842, M = 34, U = W - 2 * M;
+  const ORANGE = [239, 82, 48], NAVY = [18, 30, 48], MUTED = [90, 106, 126], BORDER = [220, 226, 235], LIGHT = [247, 249, 252], LIGHT2 = [251, 252, 253];
+  const pages = [];
+  let ops = [];
+  let pageNo = 1;
+  let top = 0;
+  const rgb = (c) => `${c[0] / 255} ${c[1] / 255} ${c[2] / 255}`;
+  const y = t => H - t;
+  const add = op => ops.push(op);
+  const rect = (x, t, w, h, fill) => add(`q ${rgb(fill)} rg ${x} ${H - t - h} ${w} ${h} re f Q`);
+  const line = (x1, t1, x2, t2, stroke=BORDER, width=.6) => add(`q ${width} w ${rgb(stroke)} RG ${x1} ${y(t1)} m ${x2} ${y(t2)} l S Q`);
+  const text = (value, x, t, size=9, color=NAVY, font='F1') => add(`BT ${rgb(color)} rg /${font} ${size} Tf 1 0 0 1 ${x} ${y(t)} Tm (${esc(value)}) Tj ET`);
+  const bold = (value, x, t, size=9, color=NAVY) => text(value, x, t, size, color, 'F2');
+  const right = (value, xr, t, size=9, color=NAVY, font='F1') => { const v=plain(value); const approx=v.length*size*0.52; text(v, xr-approx, t, size, color, font); };
+  const footer = () => { line(M, 804, W-M, 804); text('G-RECORDS  |  SHOWROOM QUOTATION REQUEST', M, 819, 7.2, MUTED); right(`Page ${pageNo}`, W-M, 819, 7.2, MUTED); };
+  function header(continuation=false) {
+    rect(0, 0, W, continuation ? 56 : 96, LIGHT);
+    rect(0, 0, 7, continuation ? 56 : 96, ORANGE);
+    bold('G-RECORDS', M, 25, continuation ? 13 : 17, ORANGE);
+    bold(continuation ? `SHOWROOM QUOTATION REQUEST - ${orderNumber}` : 'SHOWROOM QUOTATION REQUEST', M, continuation ? 43 : 48, continuation ? 8.5 : 11, MUTED);
+    if (!continuation) {
+      bold('REQUEST', W-M-112, 25, 8, MUTED);
+      right(orderNumber, W-M-112+112, 44, 12, NAVY, 'F2');
+      right('NON-PRICED CUSTOMER REQUEST', W-M, 65, 8, ORANGE, 'F2');
+      top = 113;
+    } else top = 72;
   }
-  function line(x1, y1, x2, y2, stroke=[220,226,235], width=0.7) {
-    ops.push(`${width} w ${rgb(...stroke)} RG ${x1} ${y1} m ${x2} ${y2} l S`);
-  }
-  function text(text, x, y, size=10, color=[25,36,55], font='/F1') {
-    ops.push(`${rgb(...color)} rg BT ${font} ${size} Tf ${x} ${y} Td (${pdfText(text)}) Tj ET`);
-  }
-  function bold(textValue, x, y, size=10, color=[18,30,48]) {
-    text(textValue, x, y, size, color, '/F2');
-  }
-
-  // Header band
-  rect(0, H-96, W, 96, [247, 249, 252]);
-  rect(0, H-96, 7, 96, [239, 82, 48]);
-  text('G-RECORDS', margin, H-40, 16, [239,82,48], '/F2');
-  text('SHOWROOM QUOTATION REQUEST', margin, H-60, 11, [89,105,127], '/F2');
-  text('REQUEST', W-margin-112, H-35, 8, [112,126,145], '/F2');
-  bold(orderNumber, W-margin-112, H-53, 12);
-  text('NON-PRICED CUSTOMER REQUEST', W-margin-180, H-75, 8, [239,82,48], '/F2');
-
-  // Customer block
-  let y = H - 122;
-  text('CUSTOMER DETAILS', margin, y, 8.5, [112,126,145], '/F2');
-  y -= 13;
-  rect(margin, y-42, usable, 42, [250,251,253]);
-  const col2 = margin + usable/2;
-  bold('Customer', margin+10, y-14, 8.5, [112,126,145]);
-  text(customerName || 'Registered Guest', margin+10, y-29, 10.5);
-  bold('Email', col2, y-14, 8.5, [112,126,145]);
-  text(customerEmail || '-', col2, y-29, 10.5);
-  y -= 59;
-
-  text('REQUESTED PRODUCTS', margin, y, 8.5, [112,126,145], '/F2');
-  y -= 14;
-
-  // Table geometry
-  const cols = [
-    { title: 'S.NO', w: 34, align: 'center' },
-    { title: 'PRODUCT DESCRIPTION', w: 274, align: 'left' },
-    { title: 'EAN', w: 108, align: 'left' },
-    { title: 'QTY', w: 54, align: 'center' },
-    { title: 'REQUIRED DATE', w: 89, align: 'center' },
-  ];
-  const headerH = 26;
-  const rowBase = 36;
-  const tableX = margin;
-  const xPositions = [tableX];
-  for (const c of cols) xPositions.push(xPositions[xPositions.length-1] + c.w);
-
-  function tableHeader(topY) {
-    rect(tableX, topY-headerH, usable, headerH, [239,82,48]);
-    cols.forEach((c, i) => {
-      const x0=xPositions[i], center=x0+c.w/2;
-      if (c.align==='center') text(c.title, center - c.title.length*2.3, topY-17, 7.5, [255,255,255], '/F2');
-      else bold(c.title, x0+7, topY-17, 7.5, [255,255,255]);
-      if (i>0) line(x0, topY-headerH, x0, topY, [255,145,122], 0.5);
-    });
-    return topY-headerH;
-  }
-
-  let cursor = tableHeader(y);
-  let pageNumber = 1;
-  const pageStreams = [];
-
-  // We build each page independently to support long quotations.
-  let currentOps = [...ops];
-  const footer = () => {
-    line(margin, 28, W-margin, 28, [225,229,235], 0.6);
-    text('G-RECORDS - Showroom quotation request', margin, 16, 7.5, [117,129,146]);
-    text(`Page ${pageNumber}`, W-margin-42, 16, 7.5, [117,129,146]);
-  };
-
-  function startContinuationPage() {
+  function pushPage() {
     footer();
-    pageStreams.push(currentOps.join('\n'));
-    pageNumber += 1;
-    currentOps = [];
-    // repeat compact header
-    rect(0, H-56, W, 56, [247,249,252]);
-    rect(0, H-56, 7, 56, [239,82,48]);
-    text('G-RECORDS', margin, H-24, 12, [239,82,48], '/F2');
-    text(`SHOWROOM QUOTATION REQUEST - ${orderNumber}`, margin, H-42, 8.5, [89,105,127], '/F2');
-    return H-76;
+    pages.push(ops.join('\n'));
+    ops=[];
+    pageNo += 1;
+    header(true);
   }
 
-  let availableY = cursor;
-  items.forEach((item, index) => {
-    const nameLines = wrap(cleanName(item), 34);
-    const rowH = Math.max(rowBase, nameLines.length * 12 + 18);
-    if (availableY - rowH < 80) availableY = startContinuationPage();
+  header(false);
+  text('CUSTOMER DETAILS', M, top, 8.5, MUTED, 'F2');
+  top += 9;
+  rect(M, top, U, 45, LIGHT2);
+  line(M, top+45, W-M, top+45);
+  const mid = M + U/2;
+  bold('CUSTOMER', M+10, top+14, 7.5, MUTED); text(customerName || 'Registered Guest', M+10, top+29, 10.2);
+  bold('REGISTERED EMAIL', mid, top+14, 7.5, MUTED); text(customerEmail || '-', mid, top+29, 10.2);
+  top += 63;
+  text('REQUESTED PRODUCTS', M, top, 8.5, MUTED, 'F2');
+  top += 13;
 
-    if (index % 2 === 1) rect(tableX, availableY-rowH, usable, rowH, [250,251,253]);
-    line(tableX, availableY-rowH, tableX+usable, availableY-rowH, [226,230,236], 0.6);
-    cols.forEach((c, i) => {
-      if (i>0) line(xPositions[i], availableY-rowH, xPositions[i], availableY, [226,230,236], 0.5);
+  const cols = [
+    {title:'S.NO', w:34, align:'center'},
+    {title:'PRODUCT DESCRIPTION', w:272, align:'left'},
+    {title:'EAN', w:104, align:'left'},
+    {title:'QTY', w:54, align:'center'},
+    {title:'REQUIRED DATE', w:97, align:'center'},
+  ];
+  const xs=[M]; cols.forEach(c=>xs.push(xs[xs.length-1]+c.w));
+  const tableHeader = () => {
+    rect(M, top, U, 26, ORANGE);
+    cols.forEach((c,i)=>{
+      const x0=xs[i]; if(c.align==='center'){ const v=c.title; const approx=v.length*3.45; text(v, x0+c.w/2-approx, top+17, 7.4, [255,255,255], 'F2'); }
+      else bold(c.title, x0+7, top+17, 7.4, [255,255,255]);
+      if(i>0) line(x0, top, x0, top+26, [255,160,140], .5);
     });
+    top += 26;
+  };
+  tableHeader();
 
-    text(String(index+1), xPositions[0]+14, availableY-rowH/2-3, 9.5, [45,58,79]);
-    nameLines.forEach((lineText, li) => text(lineText, xPositions[1]+7, availableY-16-(li*12), 9.2, [25,36,55]));
-    text(sanitize(item.ean || '-'), xPositions[2]+7, availableY-rowH/2-3, 8.8, [73,90,115]);
-    const qtyText = fmtNumber(item.quantity);
-    text(qtyText, xPositions[3] + cols[3].w/2 - qtyText.length*2.4, availableY-rowH/2-3, 9.2, [18,30,48], '/F2');
-    const d = fmtDate(item.requiredDate || item.required_date);
-    text(d, xPositions[4] + cols[4].w/2 - d.length*2.2, availableY-rowH/2-3, 8.6, [73,90,115]);
-    availableY -= rowH;
+  items.forEach((item, idx) => {
+    const nameLines = wrap(cleanName(item), 34);
+    const rowH = Math.max(38, 16 + nameLines.length * 12);
+    if (top + rowH > 780) { pushPage(); tableHeader(); }
+    if (idx % 2 === 1) rect(M, top, U, rowH, LIGHT2);
+    line(M, top+rowH, W-M, top+rowH);
+    for(let i=1;i<cols.length;i++) line(xs[i], top, xs[i], top+rowH);
+    text(String(idx+1), xs[0]+14, top+rowH/2+3, 9.2);
+    nameLines.forEach((ln,li)=>text(ln, xs[1]+7, top+16+li*12, 9.1));
+    text(plain(item.ean || '-'), xs[2]+7, top+rowH/2+3, 8.5, MUTED);
+    const q=fmtQty(item.quantity); const qApprox=q.length*4.6; bold(q, xs[3]+cols[3].w/2-qApprox, top+rowH/2+3, 9.1);
+    const d=fmtDate(item.requiredDate || item.required_date); right(d, xs[4]+cols[4].w-7, top+rowH/2+3, 8.4, MUTED);
+    top += rowH;
   });
 
-  // Summary and comments; start a new page if needed.
-  if (availableY < 190) availableY = startContinuationPage();
-  availableY -= 14;
-  rect(margin, availableY-34, usable, 34, [245,247,250]);
-  bold('TOTAL PRODUCTS', margin+12, availableY-14, 8.5, [112,126,145]);
-  bold(String(items.length), margin+12, availableY-27, 10.5);
-  bold('TOTAL QUANTITY', margin+170, availableY-14, 8.5, [112,126,145]);
-  bold(fmtNumber(totalQuantity), margin+170, availableY-27, 10.5);
-  availableY -= 50;
+  if (top + 150 > 780) pushPage();
+  top += 14;
+  rect(M, top, U, 44, LIGHT);
+  bold('TOTAL PRODUCTS', M+12, top+17, 7.8, MUTED); bold(String(items.length), M+12, top+34, 11);
+  bold('TOTAL QUANTITY', M+170, top+17, 7.8, MUTED); bold(fmtQty(totalQty), M+170, top+34, 11);
+  top += 61;
 
-  text('CUSTOMER COMMENTS', margin, availableY, 8.5, [112,126,145], '/F2');
-  const commentLines = wrap(comments || '-', 94);
-  const commentH = Math.max(46, commentLines.length*12+20);
-  rect(margin, availableY-commentH-8, usable, commentH, [250,251,253]);
-  commentLines.slice(0,8).forEach((l, i) => text(l, margin+10, availableY-26-(i*12), 9.2, [45,58,79]));
-  availableY -= commentH + 24;
-
-  if (availableY < 90) availableY = startContinuationPage();
-  rect(margin, availableY-42, usable, 42, [255,247,243]);
-  text('NEXT STEP', margin+10, availableY-15, 8, [239,82,48], '/F2');
-  text('Pricing and availability will be confirmed by G-RECORDS Accounts.', margin+10, availableY-30, 9, [73,90,115]);
-
+  text('CUSTOMER COMMENTS', M, top, 8.5, MUTED, 'F2');
+  top += 9;
+  const commentLines = wrap(comments || '-', 91).slice(0, 10);
+  const commentH = Math.max(50, commentLines.length*12+22);
+  rect(M, top, U, commentH, LIGHT2);
+  commentLines.forEach((ln, i)=>text(ln, M+10, top+18+i*12, 9.1, MUTED));
+  top += commentH + 18;
+  if (top + 60 > 780) pushPage();
+  rect(M, top, U, 44, [255,247,243]);
+  bold('NEXT STEP', M+10, top+16, 7.8, ORANGE);
+  text('Pricing and availability will be confirmed by G-RECORDS Accounts.', M+10, top+32, 9, MUTED);
   footer();
-  pageStreams.push(currentOps.join('\n'));
+  pages.push(ops.join('\n'));
 
-  // Build PDF objects: catalog, pages, fonts, each page + content.
-  const objects = [];
-  objects.push('<< /Type /Catalog /Pages 2 0 R >>');
-  const pageNums = pageStreams.map((_,i)=>5+i*2);
-  objects.push(`<< /Type /Pages /Kids [${pageNums.map(n=>`${n} 0 R`).join(' ')}] /Count ${pageStreams.length} >>`);
-  objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
-  objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
-  pageStreams.forEach((stream, i) => {
-    const pageNo = 5+i*2, contentNo = pageNo+1;
-    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentNo} 0 R >>`);
-    objects.push(`<< /Length ${byteLength(stream)} >>\nstream\n${stream}\nendstream`);
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R /ViewerPreferences << /DisplayDocTitle true >> >>',
+    '',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
+  ];
+  const pageNums = pages.map((_,i)=>5+i*2);
+  objects[1] = `<< /Type /Pages /Kids [${pageNums.map(n=>`${n} 0 R`).join(' ')}] /Count ${pages.length} >>`;
+  pages.forEach((stream,i)=>{
+    const p=5+i*2, c=p+1;
+    const streamBytes=encoder.encode(stream).length;
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /ProcSet [/PDF /Text] /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${c} 0 R >>`);
+    objects.push(`<< /Length ${streamBytes} >>\r\nstream\r\n${stream}\r\nendstream`);
   });
-
-  let pdf='%PDF-1.4\n';
+  let pdf='%PDF-1.4\r\n';
   const offsets=[0];
-  objects.forEach((obj,i)=>{ offsets[i+1]=byteLength(pdf); pdf+=`${i+1} 0 obj\n${obj}\nendobj\n`; });
-  const xref=byteLength(pdf);
-  pdf+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;
-  for(let i=1;i<=objects.length;i++) pdf+=`${String(offsets[i]).padStart(10,'0')} 00000 n \n`;
-  pdf+=`trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
-
-  const blob=new Blob([encoder.encode(pdf)],{type:'application/pdf'});
-  const url=URL.createObjectURL(blob);
+  objects.forEach((obj,i)=>{ offsets[i+1]=encoder.encode(pdf).length; pdf += `${i+1} 0 obj\r\n${obj}\r\nendobj\r\n`; });
+  const xref=encoder.encode(pdf).length;
+  pdf += `xref\r\n0 ${objects.length+1}\r\n0000000000 65535 f \r\n`;
+  for(let i=1;i<=objects.length;i++) pdf += `${String(offsets[i]).padStart(10,'0')} 00000 n \r\n`;
+  pdf += `trailer\r\n<< /Size ${objects.length+1} /Root 1 0 R >>\r\nstartxref\r\n${xref}\r\n%%EOF\r\n`;
+  // Use a data URL rather than a short-lived Blob URL. This is more reliable in
+  // Chromium/Edge when a download is triggered immediately after an async RPC.
+  const bytes = encoder.encode(pdf);
+  let binary = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  const dataUrl = `data:application/pdf;base64,${btoa(binary)}`;
   const a=document.createElement('a');
-  a.href=url;
-  a.download=`G-Records-Quotation-Request-${sanitize(orderNumber)}.pdf`;
-  a.style.display='none';
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(()=>{a.remove();URL.revokeObjectURL(url);},1200);
+  a.href=dataUrl; a.download=`G-Records-Quotation-Request-${plain(orderNumber)||'Request'}.pdf`; a.style.display='none';
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>a.remove(), 3000);
+}
+
+async function enrichQuotationItems(items) {
+  const rows = Array.isArray(items) ? items : [];
+  const ids = rows.map(item => item?.showroom_item_id).filter(Boolean);
+  if (!ids.length) return rows;
+  const { data } = await supabase
+    .from('showroom_items')
+    .select('id,name,description,model,article_no,ean,category,image_url')
+    .in('id', ids);
+  const byId = new Map((data || []).map(row => [String(row.id), row]));
+  return rows.map(item => {
+    const row = byId.get(String(item.showroom_item_id));
+    return row ? { ...row, ...item, description: row.description || item.description, name: row.name || item.name } : item;
+  });
 }
 
 
@@ -351,26 +335,9 @@ async function downloadOrderQuotation(order) {
     ...item,
     requiredDate: item.required_date || '',
     product_name: item.product_name || '',
-    name: item.product_name || '',
   }));
   if (!items.length) return;
-
-  // Prefer the current showroom master data when an old order snapshot contains
-  // a placeholder such as "Untitled Product". This keeps historical PDFs
-  // readable without changing the saved order itself.
-  const showroomIds = items.map(item => item.showroom_item_id).filter(Boolean);
-  if (showroomIds.length) {
-    const { data: showroomRows } = await supabase
-      .from('showroom_items')
-      .select('id,name,description,model,article_no,ean,category,image_url')
-      .in('id', showroomIds);
-    const byId = new Map((showroomRows || []).map(row => [String(row.id), row]));
-    items = items.map(item => {
-      const current = byId.get(String(item.showroom_item_id));
-      return current ? { ...current, ...item, description: current.description || item.description } : item;
-    });
-  }
-
+  items = await enrichQuotationItems(items).catch(() => items);
   createQuotationRequestPdf({
     orderNumber: order.order_number,
     customerName: order.customer_name || 'Registered Guest',
@@ -379,6 +346,7 @@ async function downloadOrderQuotation(order) {
     comments: order.comments || '',
   });
 }
+
 
 function OrderHistoryPopup({ onClose, session }) {
   const [orders, setOrders] = useState([]);
@@ -416,7 +384,7 @@ function OrderHistoryPopup({ onClose, session }) {
       const orderIds = baseOrders.map(order => order.id);
       const { data: itemRows, error: itemError } = await supabase
         .from('showroom_order_items')
-        .select('id,order_id,showroom_item_id,product_name,ean,quantity,required_date,availability,quoted_unit_price,account_note,quoted_at')
+        .select('id,order_id,product_name,ean,quantity,required_date,availability,quoted_unit_price,account_note,quoted_at')
         .in('order_id', orderIds)
         .order('id', { ascending: true });
 
@@ -580,11 +548,12 @@ function SelectionPopup({ mode, products, onClose, onOpen, isFavourite, inCart, 
     }
 
     const orderNumber = order.order_number;
+    const pdfItems = await enrichQuotationItems(items).catch(() => items);
     createQuotationRequestPdf({
       orderNumber,
       customerName: customerProfile?.full_name || session.user.email,
       customerEmail,
-      items,
+      items: pdfItems,
       comments,
     });
 

@@ -329,3 +329,204 @@
 .showroom-order-filters{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px}.showroom-order-filters button{border:1px solid #dfe6ee;background:#fff;border-radius:999px;padding:8px 13px;text-transform:capitalize;color:#5c7088;cursor:pointer}.showroom-order-filters button.active{background:#172033;color:#fff;border-color:#172033}.showroom-order-head-actions{display:flex;gap:8px;flex-wrap:wrap}.showroom-admin-line-total{white-space:nowrap;text-align:right}.showroom-order-meta-line{display:flex;justify-content:space-between;gap:12px;margin-top:12px;color:#71839b;font-size:12px}
 @media(max-width:1100px){.showroom-order-table-head,.showroom-order-table-row{grid-template-columns:200px 55px 110px 150px 110px 110px 150px}.showroom-order-card-head{flex-direction:column}.showroom-order-meta-line{flex-direction:column}}
 .showroom-history-quote-total{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding:14px 16px;border-radius:12px;background:#f7f9fb;color:#334155}.showroom-history-quote-total strong{font-size:18px;color:#111827}
+
+/* ============================================================
+   MOBILE SHOWROOM CLEAN-UP v8
+   ============================================================ */
+@media (max-width: 720px) {
+  .showroom-header {
+    position: sticky;
+    top: 0;
+    padding: 11px 14px 12px;
+    gap: 10px;
+    z-index: 900;
+  }
+  .showroom-brand-lockup { min-width: 0; gap: 9px; }
+  .showroom-mark { width: 38px; height: 38px; border-radius: 12px; }
+  .showroom-brand-eyebrow { font-size: 9px; }
+  .showroom-brand-title { font-size: 14px; }
+  .showroom-header-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(4, 42px) minmax(0, 1fr);
+    gap: 7px;
+    align-items: center;
+    justify-content: stretch;
+  }
+  .showroom-search {
+    width: auto;
+    min-width: 0;
+    grid-column: 1 / -1;
+    grid-row: 1;
+    min-height: 44px;
+    padding: 10px 12px;
+    border-radius: 13px;
+  }
+  .showroom-search input { min-width: 0; font-size: 16px; }
+  .showroom-scan-btn,
+  .showroom-icon-btn,
+  .showroom-guest-btn {
+    min-width: 42px;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 12px;
+  }
+  .showroom-scan-btn { grid-column: 1; grid-row: 2; }
+  .showroom-icon-btn:nth-of-type(2) { grid-column: 2; grid-row: 2; }
+  .showroom-icon-btn:nth-of-type(3) { grid-column: 3; grid-row: 2; }
+  .showroom-icon-btn:nth-of-type(4) { grid-column: 4; grid-row: 2; }
+  .showroom-guest-menu-wrap { grid-column: 5; grid-row: 2; justify-self: end; }
+  .showroom-guest-btn { width: 100%; padding: 0 12px; }
+  .showroom-scan-btn span { display: none; }
+  .showroom-count-badge { right: -4px; top: -5px; }
+  .showroom-main { width: calc(100% - 24px); padding-top: 14px; }
+  .showroom-hero { padding: 24px 20px; border-radius: 20px; }
+  .showroom-hero h1 { font-size: 31px; margin-top: 8px; }
+  .showroom-hero p { font-size: 14px; line-height: 1.55; }
+  .showroom-hero-actions { margin-top: 18px; }
+  .showroom-hero-actions .showroom-primary-btn,
+  .showroom-hero-actions .showroom-outline-btn { flex: 1; justify-content: center; min-height: 44px; padding: 10px 11px; font-size: 13px; }
+  .showroom-section-block { margin-top: 26px; }
+  .showroom-block-heading { align-items: flex-end; gap: 10px; }
+  .showroom-block-heading h2 { font-size: 23px; }
+  .showroom-product-grid,
+  .showroom-featured-grid { gap: 10px; }
+  .showroom-product-card { border-radius: 14px; }
+  .showroom-product-image-wrap { height: 128px !important; min-height: 128px !important; max-height: 128px !important; flex-basis: 128px !important; }
+  .showroom-product-image-wrap img { padding: 7px !important; }
+  .showroom-product-card-body { padding: 10px 10px 9px; }
+  .showroom-product-card h3 { font-size: 13px; line-height: 1.28; }
+  .showroom-product-card p { font-size: 10px; min-height: 27px; }
+  .showroom-card-actions { padding: 0 9px 9px; gap: 6px; }
+  .showroom-card-action { min-height: 38px; font-size: 10px; }
+}
+
+@media (max-width: 420px) {
+  .showroom-header { padding-left: 11px; padding-right: 11px; }
+  .showroom-header-actions { grid-template-columns: repeat(4, 40px) minmax(0, 1fr); gap: 6px; }
+  .showroom-scan-btn,
+  .showroom-icon-btn,
+  .showroom-guest-btn { min-width: 40px; width: 40px; height: 40px; }
+  .showroom-guest-btn { padding: 0 9px; font-size: 12px; }
+  .showroom-mark { width: 36px; height: 36px; }
+  .showroom-brand-title { font-size: 13px; }
+  .showroom-main { width: calc(100% - 18px); }
+  .showroom-hero { padding: 21px 17px; }
+  .showroom-hero-actions { gap: 7px; }
+}
+
+/* Popup and scanner overlays: comfortable iPhone/iPad sizing and outside-tap dismissal. */
+@media (max-width: 720px) {
+  .showroom-popup-overlay { padding: 8px; place-items: center; }
+  .showroom-popup { width: 100%; max-height: min(92vh, 760px); border-radius: 18px; }
+  .showroom-popup-header { padding: 15px 16px; }
+  .showroom-popup-header h2 { font-size: 22px; }
+  .showroom-popup-body { padding: 14px; }
+  .showroom-popup-close { width: 42px; height: 42px; border-radius: 12px; font-size: 25px; }
+  .showroom-popup-item { grid-template-columns: 52px minmax(0, 1fr) auto; gap: 8px; padding: 9px; border-radius: 13px; }
+  .showroom-popup-item-image { width: 52px; height: 52px; border-radius: 10px; }
+  .showroom-popup-item-name { font-size: 14px; line-height: 1.3; overflow-wrap: anywhere; }
+  .showroom-popup-item-info span { font-size: 10px; line-height: 1.35; overflow-wrap: anywhere; }
+  .showroom-small-btn { width: 38px; height: 38px; }
+  .showroom-popup-footer { flex-direction: column-reverse; gap: 8px; }
+  .showroom-popup-footer > button { width: 100%; justify-content: center; min-height: 44px; }
+  .showroom-preview-row { padding: 12px 2px; }
+  .showroom-order-total { font-size: 14px; }
+  .showroom-order-fields input, .showroom-order-fields textarea { font-size: 16px; }
+  .scanner-overlay { padding: 8px; align-items: stretch; }
+  .scanner-modal { width: 100%; max-height: calc(100% - 8px); border-radius: 18px; }
+  .scanner-header { padding: 16px; gap: 10px; }
+  .scanner-header h2 { font-size: 22px; }
+  .scanner-header p { font-size: 12px; line-height: 1.45; }
+  .scanner-mode-tabs { padding: 0 10px 10px; gap: 7px; }
+  .scanner-mode-tabs button { min-height: 44px; font-size: 12px; }
+  .scanner-scroll-area { padding: 0 10px 10px; }
+  .scanner-footer { padding: 10px 14px 14px; font-size: 10px; }
+  .scanner-not-found-backdrop { padding: 12px; }
+  .scanner-not-found { width: min(100%, 430px); padding: 24px 16px 16px; border-radius: 18px; }
+  .scanner-not-found h3 { font-size: 20px; line-height: 1.3; }
+  .scanner-not-found .btn { width: 100%; min-height: 44px; }
+}
+
+/* ============================================================
+   MOBILE SHOWROOM CLEAN LAYOUT v9
+   ============================================================ */
+@media (max-width: 720px) {
+  .showroom-header {
+    position: sticky;
+    top: 0;
+    padding: 10px 12px 12px;
+    gap: 9px;
+    background: rgba(248,250,252,.96);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+  .showroom-brand-lockup { min-width: 0; gap: 9px; }
+  .showroom-mark { width: 38px; height: 38px; border-radius: 11px; }
+  .showroom-brand-eyebrow { font-size: 9px; letter-spacing: .13em; }
+  .showroom-brand-title { font-size: 14px; line-height: 1.15; }
+  .showroom-header-actions {
+    width: 100%;
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(72px, 1.35fr) !important;
+    gap: 7px !important;
+    align-items: center;
+  }
+  .showroom-search {
+    width: auto !important;
+    min-width: 0;
+    grid-column: 1 / -1 !important;
+    grid-row: 1 !important;
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: 9px 12px;
+    border-radius: 13px;
+    box-shadow: none;
+  }
+  .showroom-search input { min-width: 0; font-size: 16px; }
+  .showroom-scan-btn,
+  .showroom-icon-btn,
+  .showroom-guest-btn {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 44px !important;
+    padding: 0 !important;
+    border-radius: 12px !important;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+  .showroom-scan-btn { grid-column: 1 !important; grid-row: 2 !important; }
+  .showroom-header-actions > .showroom-icon-btn:nth-of-type(2) { grid-column: 2 !important; grid-row: 2 !important; }
+  .showroom-header-actions > .showroom-icon-btn:nth-of-type(3) { grid-column: 3 !important; grid-row: 2 !important; }
+  .showroom-header-actions > .showroom-icon-btn:nth-of-type(4) { grid-column: 4 !important; grid-row: 2 !important; }
+  .showroom-guest-menu-wrap { grid-column: 5 !important; grid-row: 2 !important; width: 100%; }
+  .showroom-guest-btn { font-size: 12px; font-weight: 800; }
+  .showroom-guest-chevron { display: none; }
+  .showroom-scan-btn span { display: none; }
+  .showroom-main { width: calc(100% - 20px); padding-top: 12px; }
+  .showroom-hero { padding: 22px 17px; border-radius: 19px; }
+  .showroom-hero h1 { font-size: 30px; }
+  .showroom-hero p { font-size: 13px; line-height: 1.55; }
+  .showroom-hero-actions { gap: 7px; }
+  .showroom-hero-actions > * { min-width: 0; }
+  .showroom-product-grid, .showroom-featured-grid { gap: 9px; }
+  .showroom-product-card { border-radius: 15px; }
+  .showroom-product-image-wrap { height: 130px !important; min-height: 130px !important; max-height: 130px !important; }
+  .showroom-product-image-wrap img { padding: 7px !important; }
+  .showroom-product-card-body { padding: 9px 9px 8px; }
+  .showroom-product-card h3 { font-size: 13px; line-height: 1.25; }
+  .showroom-product-card p { font-size: 10px; min-height: 25px; }
+}
+
+@media (max-width: 380px) {
+  .showroom-header { padding-left: 9px; padding-right: 9px; }
+  .showroom-header-actions { grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(64px, 1.25fr) !important; gap: 5px !important; }
+  .showroom-scan-btn, .showroom-icon-btn, .showroom-guest-btn { height: 42px !important; }
+  .showroom-main { width: calc(100% - 16px); }
+  .showroom-hero { padding: 20px 15px; }
+}
+
+/* Keep iOS/mobile back gestures from being consumed by the showroom shell. */
+.showroom-app { overscroll-behavior-x: auto; }

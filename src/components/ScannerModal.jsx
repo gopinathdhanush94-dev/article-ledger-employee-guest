@@ -256,7 +256,7 @@ export default function ScannerModal({ onClose, onScan, products, lookupCode }) 
       role="dialog"
       aria-modal="true"
       aria-label="Scan barcode or QR code"
-      onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}
+      onPointerDown={(e) => { if (e.target === e.currentTarget) close(); }}
     >
       <div className="scanner-modal">
         <div className="scanner-header">
@@ -325,8 +325,8 @@ export default function ScannerModal({ onClose, onScan, products, lookupCode }) 
         <div className="scanner-footer">Supported: QR, EAN-13/EAN-8, UPC, Code 128 and other common barcode formats.</div>
 
         {notFound && (
-          <div className="scanner-not-found-backdrop" role="presentation">
-            <div className="scanner-not-found" role="alertdialog" aria-modal="true" aria-label="Code not available">
+          <div className="scanner-not-found-backdrop" role="presentation" onPointerDown={(e) => { if (e.target === e.currentTarget) { setNotFound(''); scanLockRef.current = false; } }}>
+            <div className="scanner-not-found" role="alertdialog" aria-modal="true" aria-label="Code not available" onPointerDown={e => e.stopPropagation()}>
               <div className="scanner-not-found-icon">!</div>
               <div className="scanner-not-found-kicker">NOT AVAILABLE</div>
               <h3>Code not found in Article Ledger</h3>

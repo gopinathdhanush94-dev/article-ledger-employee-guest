@@ -19,12 +19,12 @@
 8. Share the downloaded PDF manually with the customer using the company's normal communication method.
 
 ## Email policy
-Quotation processing no longer uses Resend, automatic customer mail, Accounts mail, or employee mail forwarding. The old quotation Edge Functions are retained only as disabled endpoints so an accidental old invocation cannot send mail.
+Quotation processing no longer uses Resend, automatic customer mail, Accounts mail, or employee mail forwarding. The old quotation Edge Functions are retained only as disabled endpoints; they do not send mail.
 
 No quotation-related Resend secrets are required by the app.
 
 ## Barcode / scanner lookup
-Guest mobile scanning first checks the loaded showroom catalogue. If a barcode is not in the loaded list, the app calls `guest_lookup_showroom_product`, which safely looks up the code against the showroom cache and the internal product/garment source data. A successfully scanned source article is repaired into `showroom_items` with public-safe fields and becomes available to the guest showroom.
+Guest mobile scanning first checks the loaded showroom catalogue. If a barcode is not in the loaded list, the app calls `guest_lookup_showroom_product_v2`, which safely looks up the code against the showroom cache and the internal product/garment source data. A successfully scanned source article is repaired into `showroom_items` with public-safe fields and becomes available to the guest showroom.
 
 Run:
 - `supabase/guest_barcode_lookup.sql`

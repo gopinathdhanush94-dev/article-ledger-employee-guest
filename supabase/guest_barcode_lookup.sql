@@ -1,14 +1,15 @@
 -- ============================================================
--- G-RECORDS GUEST SHOWROOM — ROBUST BARCODE LOOKUP
+-- G-RECORDS GUEST SHOWROOM — ROBUST BARCODE / ARTICLE LOOKUP v2
 --
--- Guest scanning first checks the showroom cache. If a matching
--- article exists in the internal Employee Access catalog but its
--- showroom row is missing/stale/hidden, the scan repairs the safe
--- showroom row and makes that explicitly scanned item available.
--- No internal pricing/cost fields are returned.
+-- Run this once in Supabase SQL Editor.
+-- Guest scanning uses this RPC instead of exposing the internal
+-- products table to the browser. It returns showroom-safe fields only.
+-- It searches EAN exactly by digits, then Article No./Model, then garments.
+-- If the product exists in Employee Access but not in showroom_items,
+-- a safe showroom row is created automatically.
 -- ============================================================
 
-create or replace function public.guest_lookup_showroom_product(p_code text)
+create or replace function public.guest_lookup_showroom_product_v2(p_code text)
 returns table (
   id uuid,
   source_type text,
@@ -38,8 +39,9 @@ security definer
 set search_path = public
 as $$
 declare
-  v_code text := lower(regexp_replace(trim(coalesce(p_code, '')), '\\s+', '', 'g'));
-  v_digits text := regexp_replace(coalesce(p_code, ''), '\\D', '', 'g');
+  v_raw text := trim(coalesce(p_code, ''));
+  v_code text := lower(regexp_replace(trim(coalesce(p_code, '')), '[^a-zA-Z0-9]', '', 'g'));
+  v_digits text := regexp_replace(coalesce(p_code, ''), '[^0-9]', '', 'g');
   v_item public.showroom_items%rowtype;
   v_product public.products%rowtype;
   v_garment public.garments%rowtype;
@@ -55,21 +57,24 @@ begin
     return;
   end if;
 
-  -- 1) Existing showroom row, including rows that are currently hidden
-  -- from the normal guest catalogue. A deliberate barcode scan can open it.
+  -- 1) Existing showroom row. A deliberate scan is allowed to open a
+  -- hidden row, because the user has the physical code in front of them.
   select s.* into v_item
   from public.showroom_items s
-  where lower(regexp_replace(coalesce(s.ean, ''), '\\s+', '', 'g')) = v_code
-     or lower(regexp_replace(coalesce(s.article_no, ''), '\\s+', '', 'g')) = v_code
-     or lower(regexp_replace(coalesce(s.model, ''), '\\s+', '', 'g')) = v_code
-     or lower(s.id::text) = v_code
+  where (
+      (v_digits <> '' and regexp_replace(coalesce(s.ean, ''), '[^0-9]', '', 'g') = v_digits)
+      or lower(regexp_replace(coalesce(s.article_no, ''), '[^a-zA-Z0-9]', '', 'g')) = v_code
+      or lower(regexp_replace(coalesce(s.model, ''), '[^a-zA-Z0-9]', '', 'g')) = v_code
+      or lower(s.id::text) = lower(trim(coalesce(p_code, '')))
+  )
   order by s.visible desc, s.updated_at desc
   limit 1;
 
   if v_item.id is not null then
-    -- Keep the scanned item usable for quotation submission.
     if not v_item.visible then
-      update public.showroom_items set visible = true, updated_at = now() where id = v_item.id;
+      update public.showroom_items
+      set visible = true, updated_at = now()
+      where id = v_item.id;
       v_item.visible := true;
     end if;
 
@@ -83,14 +88,15 @@ begin
     return;
   end if;
 
-  -- 2) Internal Employee Access product catalog. This repairs the
-  -- showroom cache when an article was added/imported after the showroom seed.
+  -- 2) Employee Access product catalogue. This is deliberately queried
+  -- inside SECURITY DEFINER so guest RLS never exposes price/cost fields.
   select p.* into v_product
   from public.products p
-  where lower(regexp_replace(coalesce(p.ean, ''), '\\s+', '', 'g')) = v_code
-     or lower(regexp_replace(coalesce(p.article_no, ''), '\\s+', '', 'g')) = v_code
-     or lower(regexp_replace(coalesce(p.model, ''), '\\s+', '', 'g')) = v_code
-     or (v_digits <> '' and regexp_replace(coalesce(p.ean, ''), '\\D', '', 'g') = v_digits)
+  where (
+      (v_digits <> '' and regexp_replace(coalesce(p.ean, ''), '[^0-9]', '', 'g') = v_digits)
+      or lower(regexp_replace(coalesce(p.article_no, ''), '[^a-zA-Z0-9]', '', 'g')) = v_code
+      or lower(regexp_replace(coalesce(p.model, ''), '[^a-zA-Z0-9]', '', 'g')) = v_code
+  )
   order by p.updated_at desc nulls last
   limit 1;
 
@@ -112,7 +118,8 @@ begin
         v_product.brand, v_product.model, v_product.category,
         v_product.description, v_product.image_url, '[]'::jsonb,
         case when v_product.sku_l is not null and v_product.sku_w is not null and v_product.sku_h is not null
-          then concat(v_product.sku_l, ' × ', v_product.sku_w, ' × ', v_product.sku_h, coalesce(' ' || nullif(v_product.sku_dim_unit,''), '')) end,
+          then concat(v_product.sku_l, ' × ', v_product.sku_w, ' × ', v_product.sku_h,
+                      coalesce(' ' || nullif(v_product.sku_dim_unit, ''), '')) end,
         v_product.sku_l, v_product.sku_w, v_product.sku_h, v_product.sku_dim_unit,
         v_product.sku_nw, v_product.sku_gw, v_product.sku_wt_unit,
         false, true
@@ -127,11 +134,16 @@ begin
           category = v_product.category,
           description = v_product.description,
           image_url = v_product.image_url,
-          sku_l = v_product.sku_l, sku_w = v_product.sku_w, sku_h = v_product.sku_h,
-          sku_dim_unit = v_product.sku_dim_unit, sku_nw = v_product.sku_nw,
-          sku_gw = v_product.sku_gw, sku_wt_unit = v_product.sku_wt_unit,
+          sku_l = v_product.sku_l,
+          sku_w = v_product.sku_w,
+          sku_h = v_product.sku_h,
+          sku_dim_unit = v_product.sku_dim_unit,
+          sku_nw = v_product.sku_nw,
+          sku_gw = v_product.sku_gw,
+          sku_wt_unit = v_product.sku_wt_unit,
           dimensions = case when v_product.sku_l is not null and v_product.sku_w is not null and v_product.sku_h is not null
-            then concat(v_product.sku_l, ' × ', v_product.sku_w, ' × ', v_product.sku_h, coalesce(' ' || nullif(v_product.sku_dim_unit,''), '')) end,
+            then concat(v_product.sku_l, ' × ', v_product.sku_w, ' × ', v_product.sku_h,
+                        coalesce(' ' || nullif(v_product.sku_dim_unit, ''), '')) end,
           visible = true,
           updated_at = now()
       where id = v_existing.id
@@ -148,11 +160,13 @@ begin
     return;
   end if;
 
-  -- 3) Garments are also supported by barcode scan.
+  -- 3) Garment catalogue fallback.
   select g.* into v_garment
   from public.garments g
-  where lower(regexp_replace(coalesce(g.ean, ''), '\\s+', '', 'g')) = v_code
-     or lower(regexp_replace(coalesce(g.article, ''), '\\s+', '', 'g')) = v_code
+  where (
+      (v_digits <> '' and regexp_replace(coalesce(g.ean, ''), '[^0-9]', '', 'g') = v_digits)
+      or lower(regexp_replace(coalesce(g.article, ''), '[^a-zA-Z0-9]', '', 'g')) = v_code
+  )
   order by g.updated_at desc nulls last
   limit 1;
 
@@ -182,8 +196,11 @@ begin
           name = coalesce(nullif(trim(v_garment.excel_name), ''), nullif(trim(v_garment.customer_model), ''), name),
           brand = v_garment.brand,
           model = coalesce(v_garment.customer_model, v_garment.model_name, v_garment.model1),
-          category = 'Garments', description = v_garment.description,
-          image_url = v_garment.image_url, visible = true, updated_at = now()
+          category = 'Garments',
+          description = v_garment.description,
+          image_url = v_garment.image_url,
+          visible = true,
+          updated_at = now()
       where id = v_existing.id
       returning * into v_item;
     end if;
@@ -199,6 +216,29 @@ begin
 end;
 $$;
 
+grant execute on function public.guest_lookup_showroom_product_v2(text) to authenticated;
+
+-- Keep the previous RPC name available for any older deployed client.
+create or replace function public.guest_lookup_showroom_product(p_code text)
+returns table (
+  id uuid, source_type text, source_id uuid, ean text, article_no text,
+  name text, brand text, model text, category text, description text,
+  image_url text, features jsonb, dimensions text,
+  sku_l numeric, sku_w numeric, sku_h numeric, sku_dim_unit text,
+  sku_nw numeric, sku_gw numeric, sku_wt_unit text,
+  featured boolean, visible boolean
+)
+language sql
+security definer
+set search_path = public
+as $$
+  select * from public.guest_lookup_showroom_product_v2(p_code);
+$$;
+
 grant execute on function public.guest_lookup_showroom_product(text) to authenticated;
 
 notify pgrst, 'reload schema';
+
+-- Optional verification after running this migration:
+-- select id, ean, article_no, model, name
+-- from public.guest_lookup_showroom_product_v2('8904132961982');

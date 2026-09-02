@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { supabase } from '../supabaseClient.js';
 import { createQuotationRequestPdf } from '../lib/quotationPdf.js';
 import ScannerModal from './ScannerModal.jsx';
@@ -117,7 +117,7 @@ function PopupShell({ title, eyebrow, onClose, children }) {
     document.body.style.overflow = 'hidden';
     return () => { document.removeEventListener('keydown', onKeyDown, true); document.body.style.overflow = previousOverflow; };
   }, [onClose]);
-  return <div className="showroom-popup-overlay" role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+  return <div className="showroom-popup-overlay" role="presentation" onPointerDown={e => { if (e.target === e.currentTarget) onClose(); }}>
     <section className="showroom-popup" role="dialog" aria-modal="true" aria-label={title}>
       <div className="showroom-popup-header"><div><div className="showroom-popup-eyebrow">{eyebrow || 'G-RECORDS'}</div><h2>{title}</h2></div><button type="button" className="showroom-popup-close" onClick={onClose} aria-label="Close">×</button></div>
       <div className="showroom-popup-body">{children}</div>
@@ -622,16 +622,41 @@ export default function GuestShowroom() {
   const [favourites, setFavourites] = useState(() => { try { return JSON.parse(localStorage.getItem('g-records-showroom-favourites') || '[]'); } catch { return []; } });
   const [cart, setCart] = useState(() => { try { return JSON.parse(localStorage.getItem('g-records-showroom-cart') || '[]'); } catch { return []; } });
   const [cartQuantities, setCartQuantities] = useState(() => { try { return JSON.parse(localStorage.getItem('g-records-showroom-cart-quantities') || '{}'); } catch { return {}; } });
-  const [popup, setPopup] = useState(() => {
-    try { return localStorage.getItem('g-records-showroom-popup') || null; } catch { return null; }
-  });
+  const [popup, setPopup] = useState(null);
+
+  // Mobile Safari/Brave back-swipe support: every in-app detail/popup gets a
+  // history entry. A browser back gesture therefore closes the top layer instead
+  // of leaving the showroom page. The URL itself is unchanged.
+  const overlayHistoryRef = useRef([]);
+
+  function pushShowroomHistory(layer) {
+    overlayHistoryRef.current.push(layer);
+    window.history.pushState({ ...(window.history.state || {}), showroomOverlay: layer }, '', window.location.href);
+  }
+
+  function popShowroomHistory(layer) {
+    const stack = overlayHistoryRef.current;
+    const top = stack[stack.length - 1];
+    if (top === layer) {
+      // Let the popstate handler remove the layer. Removing it here as well
+      // would make a multi-layer stack lose the layer underneath on mobile.
+      window.history.back();
+      return true;
+    }
+    return false;
+  }
 
   useEffect(() => {
-    try {
-      if (popup) localStorage.setItem('g-records-showroom-popup', popup);
-      else localStorage.removeItem('g-records-showroom-popup');
-    } catch {}
-  }, [popup]);
+    const onPopState = () => {
+      const layer = overlayHistoryRef.current.pop();
+      if (layer === 'scanner') { setScannerOpen(false); return; }
+      if (layer === 'order-history') { setOrderHistoryOpen(false); return; }
+      if (layer === 'popup') { setPopup(null); return; }
+      if (layer === 'detail') { setSelected(null); return; }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   useEffect(() => { localStorage.setItem('g-records-showroom-favourites', JSON.stringify(favourites)); }, [favourites]);
   useEffect(() => { localStorage.setItem('g-records-showroom-cart', JSON.stringify(cart)); }, [cart]);
@@ -683,7 +708,7 @@ export default function GuestShowroom() {
     setLoading(true);
     const { data, error: err } = await supabase
       .from('showroom_items')
-      .select('id,source_type,ean,article_no,name,brand,model,category,description,image_url,features,dimensions,mrp,sku_l,sku_w,sku_h,sku_dim_unit,sku_nw,sku_gw,sku_wt_unit,featured,visible')
+      .select('id,source_type,ean,article_no,name,brand,model,category,description,image_url,features,dimensions,sku_l,sku_w,sku_h,sku_dim_unit,sku_nw,sku_gw,sku_wt_unit,featured,visible')
       .eq('visible', true)
       .order('featured', { ascending: false })
       .order('created_at', { ascending: false });
@@ -722,7 +747,7 @@ export default function GuestShowroom() {
       if (scannerOpen) return;
       if (selected) {
         event.preventDefault();
-        setSelected(null);
+        closeDetail();
       }
     };
     document.addEventListener('keydown', onKeyDown);
@@ -747,14 +772,59 @@ export default function GuestShowroom() {
 
   const featured = useMemo(() => items.filter(x => x.featured).slice(0, 4), [items]);
 
-  function openItem(item) {
+  function openItem(item, { pushHistory = true } = {}) {
+    if (!item) return;
+    if (pushHistory) pushShowroomHistory('detail');
     setSelected(item);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  function openScanner() { setScannerOpen(true); }
+  function closeDetail() {
+    if (!popShowroomHistory('detail')) setSelected(null);
+  }
+
+  function openItemFromPopup(item) {
+    const top = overlayHistoryRef.current[overlayHistoryRef.current.length - 1];
+    if (top === 'popup') {
+      overlayHistoryRef.current[overlayHistoryRef.current.length - 1] = 'detail';
+      window.history.replaceState({ ...(window.history.state || {}), showroomOverlay: 'detail' }, '', window.location.href);
+      setPopup(null);
+      setSelected(item);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    openItem(item);
+  }
+
+  function openScanner() {
+    if (!scannerOpen) pushShowroomHistory('scanner');
+    setScannerOpen(true);
+  }
+
+  function closeScanner() {
+    if (!popShowroomHistory('scanner')) setScannerOpen(false);
+  }
+
+  function openPopup(mode) {
+    pushShowroomHistory('popup');
+    setPopup(mode);
+  }
+
+  function closePopup() {
+    if (!popShowroomHistory('popup')) setPopup(null);
+  }
+
+  function openOrderHistory() {
+    pushShowroomHistory('order-history');
+    setOrderHistoryOpen(true);
+  }
+
+  function closeOrderHistory() {
+    if (!popShowroomHistory('order-history')) setOrderHistoryOpen(false);
+  }
+
   async function lookupGuestCode(raw) {
-    const { data, error: lookupError } = await supabase.rpc('guest_lookup_showroom_product', { p_code: String(raw || '') });
+    const { data, error: lookupError } = await supabase.rpc('guest_lookup_showroom_product_v2', { p_code: String(raw || '') });
     if (lookupError) {
       console.warn('Guest barcode lookup failed:', lookupError.message);
       return null;
@@ -764,23 +834,36 @@ export default function GuestShowroom() {
     setItems(current => current.some(existing => String(existing.id) === String(item.id)) ? current : [...current, item]);
     return item;
   }
-  function handleScan(item) { setScannerOpen(false); openItem(item); }
+  function handleScan(item) {
+    if (!item) return;
+    // Replace the scanner history layer with the product detail layer so the
+    // next mobile back-swipe closes the detail page, not an already-closed scanner.
+    const top = overlayHistoryRef.current[overlayHistoryRef.current.length - 1];
+    if (top === 'scanner') {
+      overlayHistoryRef.current[overlayHistoryRef.current.length - 1] = 'detail';
+      window.history.replaceState({ ...(window.history.state || {}), showroomOverlay: 'detail' }, '', window.location.href);
+    } else {
+      pushShowroomHistory('detail');
+    }
+    setScannerOpen(false);
+    openItem(item, { pushHistory: false });
+  }
 
   if (selected) {
     return (
       <div className="showroom-app showroom-app-detail">
-        <ShowroomHeader search={search} setSearch={value => { setSearch(value); setCollectionMode('all'); }} onScan={openScanner} onSignOut={signOut} favouriteCount={favouriteCount} cartCount={cartCount} onFavourites={() => setPopup('favourites')} onCart={() => setPopup('cart')} onOrders={() => setOrderHistoryOpen(true)} orderCount={recentOrderCount} />
-        <ProductDetail item={selected} onBack={() => setSelected(null)} onScanAnother={openScanner} isFavourite={isFavourite(selected)} inCart={inCart(selected)} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} />
-        {scannerOpen && <ScannerModal products={items} onScan={handleScan} lookupCode={lookupGuestCode} onClose={() => setScannerOpen(false)} />}
-        {orderHistoryOpen && <OrderHistoryPopup onClose={() => setOrderHistoryOpen(false)} session={session} />}
-      {popup && <SelectionPopup mode={popup} products={items} onClose={() => setPopup(null)} onOpen={openItem} isFavourite={isFavourite} inCart={inCart} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} cartQuantities={cartQuantities} setCartQuantities={setCartQuantities} customerProfile={profile} session={session} />}
+        <ShowroomHeader search={search} setSearch={value => { setSearch(value); setCollectionMode('all'); }} onScan={openScanner} onSignOut={signOut} favouriteCount={favouriteCount} cartCount={cartCount} onFavourites={() => openPopup('favourites')} onCart={() => openPopup('cart')} onOrders={openOrderHistory} orderCount={recentOrderCount} />
+        <ProductDetail item={selected} onBack={closeDetail} onScanAnother={openScanner} isFavourite={isFavourite(selected)} inCart={inCart(selected)} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} />
+        {scannerOpen && <ScannerModal products={items} onScan={handleScan} lookupCode={lookupGuestCode} onClose={closeScanner} />}
+        {orderHistoryOpen && <OrderHistoryPopup onClose={closeOrderHistory} session={session} />}
+      {popup && <SelectionPopup mode={popup} products={items} onClose={closePopup} onOpen={openItemFromPopup} isFavourite={isFavourite} inCart={inCart} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} cartQuantities={cartQuantities} setCartQuantities={setCartQuantities} customerProfile={profile} session={session} />}
       </div>
     );
   }
 
   return (
     <div className="showroom-app">
-      <ShowroomHeader search={search} setSearch={value => { setSearch(value); setCollectionMode('all'); }} onScan={openScanner} onSignOut={signOut} favouriteCount={favouriteCount} cartCount={cartCount} onFavourites={() => setPopup('favourites')} onCart={() => setPopup('cart')} onOrders={() => setOrderHistoryOpen(true)} orderCount={recentOrderCount} />
+      <ShowroomHeader search={search} setSearch={value => { setSearch(value); setCollectionMode('all'); }} onScan={openScanner} onSignOut={signOut} favouriteCount={favouriteCount} cartCount={cartCount} onFavourites={() => openPopup('favourites')} onCart={() => openPopup('cart')} onOrders={openOrderHistory} orderCount={recentOrderCount} />
       <main className="showroom-main">
         <section className="showroom-hero">
           <div>
@@ -814,9 +897,9 @@ export default function GuestShowroom() {
         </section>
       </main>
       <footer className="showroom-footer"><div>G-Records · Product Showroom</div><div>Guest access · Public product information only</div></footer>
-      {scannerOpen && <ScannerModal products={items} onScan={handleScan} lookupCode={lookupGuestCode} onClose={() => setScannerOpen(false)} />}
-      {orderHistoryOpen && <OrderHistoryPopup onClose={() => setOrderHistoryOpen(false)} session={session} />}
-      {popup && <SelectionPopup mode={popup} products={items} onClose={() => setPopup(null)} onOpen={openItem} isFavourite={isFavourite} inCart={inCart} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} cartQuantities={cartQuantities} setCartQuantities={setCartQuantities} customerProfile={profile} session={session} />}
+      {scannerOpen && <ScannerModal products={items} onScan={handleScan} lookupCode={lookupGuestCode} onClose={closeScanner} />}
+      {orderHistoryOpen && <OrderHistoryPopup onClose={closeOrderHistory} session={session} />}
+      {popup && <SelectionPopup mode={popup} products={items} onClose={closePopup} onOpen={openItemFromPopup} isFavourite={isFavourite} inCart={inCart} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} cartQuantities={cartQuantities} setCartQuantities={setCartQuantities} customerProfile={profile} session={session} />}
     </div>
   );
 }

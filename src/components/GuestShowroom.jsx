@@ -218,13 +218,15 @@ function createQuotationRequestPdf({ orderNumber, customerName, customerEmail, i
   top += 13;
 
   const cols = [
-    {title:'S.NO', w:34, align:'center'},
-    {title:'PRODUCT DESCRIPTION', w:272, align:'left'},
-    {title:'EAN', w:104, align:'left'},
-    {title:'QTY', w:54, align:'center'},
-    {title:'REQUIRED DATE', w:97, align:'center'},
+    {title:'S.NO', w:32, align:'center'},
+    {title:'PRODUCT DESCRIPTION', w:246, align:'left'},
+    {title:'EAN', w:98, align:'left'},
+    {title:'QTY', w:50, align:'center'},
+    {title:'REQUIRED DATE', w:101, align:'center'},
   ];
   const xs=[M]; cols.forEach(c=>xs.push(xs[xs.length-1]+c.w));
+  // Column widths intentionally total U (527pt) so the right edge never clips in A4.
+  if (xs[xs.length-1] !== W - M) throw new Error('Quotation table columns exceed printable width');
   const tableHeader = () => {
     rect(M, top, U, 26, ORANGE);
     cols.forEach((c,i)=>{
@@ -237,7 +239,7 @@ function createQuotationRequestPdf({ orderNumber, customerName, customerEmail, i
   tableHeader();
 
   items.forEach((item, idx) => {
-    const nameLines = wrap(cleanName(item), 34);
+    const nameLines = wrap(cleanName(item), 30);
     const rowH = Math.max(38, 16 + nameLines.length * 12);
     if (top + rowH > 780) { pushPage(); tableHeader(); }
     if (idx % 2 === 1) rect(M, top, U, rowH, LIGHT2);
@@ -247,7 +249,7 @@ function createQuotationRequestPdf({ orderNumber, customerName, customerEmail, i
     nameLines.forEach((ln,li)=>text(ln, xs[1]+7, top+16+li*12, 9.1));
     text(plain(item.ean || '-'), xs[2]+7, top+rowH/2+3, 8.5, MUTED);
     const q=fmtQty(item.quantity); const qApprox=q.length*4.6; bold(q, xs[3]+cols[3].w/2-qApprox, top+rowH/2+3, 9.1);
-    const d=fmtDate(item.requiredDate || item.required_date); right(d, xs[4]+cols[4].w-7, top+rowH/2+3, 8.4, MUTED);
+    const d=fmtDate(item.requiredDate || item.required_date); right(d, xs[4]+cols[4].w-7, top+rowH/2+3, 8.2, MUTED);
     top += rowH;
   });
 

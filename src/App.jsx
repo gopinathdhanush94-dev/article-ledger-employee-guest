@@ -393,7 +393,7 @@ function AppInner() {
             )}
           </div>
           <div style={{ display: view === 'showroom' ? 'block' : 'none' }}>
-            <ShowroomManager canEdit={permissions.canEdit} canDelete={permissions.canDelete} />
+            <ShowroomManager canEdit={permissions.canEdit} />
           </div>
           <div style={{ display: view === 'showroom-orders' ? 'block' : 'none' }}>
             <ShowroomOrders canManageQuotations={permissions.canManageQuotations} />

@@ -1473,3 +1473,16 @@ body.scanner-open{
 .um-header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:24px 26px 16px;border-bottom:1px solid var(--border)}
 .um-eyebrow{margin:0 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.11em;color:var(--primary);font-weight:800}.um-header h2{margin:0;font-size:24px}.um-header p{margin:6px 0 0;color:var(--text-soft);font-size:13px}.um-close{border:1px solid var(--border);background:rgba(255,255,255,.75);width:36px;height:36px;border-radius:12px;cursor:pointer}.um-table-wrap{overflow:auto}.um-table{width:100%;border-collapse:collapse;font-size:13px}.um-table th,.um-table td{padding:13px 16px;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle}.um-table th{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);background:rgba(248,250,252,.7)}.um-table td:first-child{min-width:230px}.um-table td strong{display:block;color:var(--text)}.um-table td span,.um-table td small{display:block;color:var(--text-muted);margin-top:3px}.um-table td small{font-size:10px}.um-table select{border:1px solid var(--border);border-radius:9px;background:#fff;padding:8px 10px;color:var(--text);font:inherit}.um-chip{display:inline-flex!important;width:max-content;padding:5px 8px;border-radius:999px;background:var(--teal-soft);color:var(--teal-hover)!important;font-weight:700}.um-chip.guest{background:rgba(100,116,139,.1);color:#475569!important}.um-muted{font-size:11px}.um-error{margin:14px 20px 0;padding:10px 12px;border-radius:10px;background:var(--danger-soft);border:1px solid rgba(220,38,38,.15);color:var(--danger);font-size:12px}.um-empty{padding:50px;text-align:center;color:var(--text-soft)}.um-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 20px;background:rgba(248,250,252,.72);border-top:1px solid var(--border);font-size:11px;color:var(--text-soft)}
 @media(max-width:700px){.um-overlay{padding:10px;align-items:stretch}.um-modal{max-height:calc(100dvh - 20px);border-radius:18px}.um-header{padding:18px 16px 14px}.um-table{min-width:760px}.um-footer{align-items:flex-start;flex-direction:column}.um-footer .btn{width:100%}}
+
+
+.um-readonly-banner {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid #d9e3ef;
+  border-radius: 10px;
+  background: #f7fafc;
+  color: var(--ink-soft, #64748b);
+  font: 600 13px/1.45 'Inter', sans-serif;
+}
+.um-toolbar { display:flex; gap:10px; align-items:center; margin: 0 0 14px; }
+.um-toolbar input { flex:1; min-width:0; }

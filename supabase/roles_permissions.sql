@@ -9,7 +9,7 @@ create table if not exists public.user_profiles (
   email text,
   employee_id text,
   account_type text not null default 'employee' check (account_type in ('employee','guest')),
-  role text not null default 'viewer' check (role in ('super_admin','admin','editor','viewer','guest')),
+  role text not null default 'viewer' check (role in ('super_admin','admin','quotation_manager','guest_manager','editor','viewer','guest')),
   status text not null default 'active' check (status in ('active','pending','disabled')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

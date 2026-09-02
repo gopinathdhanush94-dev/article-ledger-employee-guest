@@ -11,7 +11,7 @@ const BLANK_STYLE = {
 };
 const BLANK_SIZE_ROW = () => ({ _key: Math.random().toString(36).slice(2), size: '', ratio: '', ean: '', article: '', mrp: '', rrp: '' });
 
-export default function GarmentForm({ garments, editingGroup, onSaved, onCancel }) {
+export default function GarmentForm({ garments, editingGroup, onSaved, onCancel, readOnly = false }) {
   const dialogs = useDialogs();
   const [style, setStyle] = useState(BLANK_STYLE);
   const [sizeRows, setSizeRows] = useState([BLANK_SIZE_ROW()]);
@@ -199,6 +199,8 @@ export default function GarmentForm({ garments, editingGroup, onSaved, onCancel 
         </div>
 
         <form onSubmit={handleSubmit}>
+          {readOnly && <div className="um-readonly-banner">View only — your role can open Add Product, but cannot create or edit garment records.</div>}
+          <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
           <div className="form-grid">
             <div className="field full">
               <label>Style Photo</label>
@@ -291,12 +293,12 @@ export default function GarmentForm({ garments, editingGroup, onSaved, onCancel 
               <button type="button" className="btn" onClick={addSizeRow}>+ Add another size</button>
             </div>
           </div>
-
+          </fieldset>
           <div className="form-footer">
             <button type="button" className="btn" onClick={onCancel}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={saving}>
+            {!readOnly && <button type="submit" className="btn btn-primary" disabled={saving}>
               {saving ? 'Saving…' : editingGroup ? 'Save Changes' : 'Add Garment Style'}
-            </button>
+            </button>}
           </div>
         </form>
       </div>

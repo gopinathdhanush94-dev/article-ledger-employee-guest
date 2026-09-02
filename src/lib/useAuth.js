@@ -2,12 +2,48 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../supabaseClient.js';
 
 const ROLE_PERMISSIONS = {
-  super_admin:      { canView: true, canAdd: true, canEdit: true, canDelete: true,  canHistory: true, canDataQuality: true,  canManageUsers: true,  canManageQuotations: true },
-  admin:            { canView: true, canAdd: true, canEdit: true, canDelete: true,  canHistory: true, canDataQuality: true,  canManageUsers: true,  canManageQuotations: true },
-  quotation_manager:{ canView: true, canAdd: false,canEdit: false,canDelete: false, canHistory: true, canDataQuality: false, canManageUsers: false, canManageQuotations: true },
-  editor:           { canView: true, canAdd: true, canEdit: true, canDelete: false, canHistory: true, canDataQuality: true,  canManageUsers: false, canManageQuotations: false },
-  viewer:           { canView: true, canAdd: false,canEdit: false,canDelete: false, canHistory: true, canDataQuality: false, canManageUsers: false, canManageQuotations: false },
-  guest:            { canView: false,canAdd: false,canEdit: false,canDelete: false, canHistory: false,canDataQuality: false, canManageUsers: false, canManageQuotations: false },
+  super_admin: {
+    canView: true, canViewGeneral: true, canViewGarments: true, canViewAddProduct: true,
+    canAdd: true, canEdit: true, canDelete: true, canHistory: true,
+    canViewShowroom: true, canManageShowroom: true,
+    canDataQuality: true, canManageUsers: true, canManageQuotations: true,
+  },
+  admin: {
+    canView: true, canViewGeneral: true, canViewGarments: true, canViewAddProduct: true,
+    canAdd: true, canEdit: true, canDelete: true, canHistory: true,
+    canViewShowroom: true, canManageShowroom: true,
+    canDataQuality: true, canManageUsers: true, canManageQuotations: true,
+  },
+  quotation_manager: {
+    canView: true, canViewGeneral: true, canViewGarments: true, canViewAddProduct: true,
+    canAdd: false, canEdit: false, canDelete: false, canHistory: true,
+    canViewShowroom: true, canManageShowroom: true,
+    canDataQuality: false, canManageUsers: false, canManageQuotations: true,
+  },
+  guest_manager: {
+    canView: true, canViewGeneral: true, canViewGarments: true, canViewAddProduct: true,
+    canAdd: false, canEdit: false, canDelete: false, canHistory: true,
+    canViewShowroom: true, canManageShowroom: true,
+    canDataQuality: false, canManageUsers: false, canManageQuotations: false,
+  },
+  editor: {
+    canView: true, canViewGeneral: true, canViewGarments: true, canViewAddProduct: true,
+    canAdd: true, canEdit: true, canDelete: false, canHistory: true,
+    canViewShowroom: false, canManageShowroom: false,
+    canDataQuality: false, canManageUsers: false, canManageQuotations: false,
+  },
+  viewer: {
+    canView: true, canViewGeneral: true, canViewGarments: true, canViewAddProduct: false,
+    canAdd: false, canEdit: false, canDelete: false, canHistory: true,
+    canViewShowroom: false, canManageShowroom: false,
+    canDataQuality: false, canManageUsers: false, canManageQuotations: false,
+  },
+  guest: {
+    canView: false, canViewGeneral: false, canViewGarments: false, canViewAddProduct: false,
+    canAdd: false, canEdit: false, canDelete: false, canHistory: false,
+    canViewShowroom: false, canManageShowroom: false,
+    canDataQuality: false, canManageUsers: false, canManageQuotations: false,
+  },
 };
 
 const DEFAULT_PERMISSIONS = ROLE_PERMISSIONS.viewer;
@@ -54,7 +90,7 @@ export function useAuth() {
       }
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((event, sess) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, sess) => {
       if (!mounted) return;
       setSession(sess || null);
       if (!sess) {
@@ -62,31 +98,14 @@ export function useAuth() {
         if (initialised) setLoading(false);
         return;
       }
-
-      // TOKEN_REFRESHED happens when the browser tab becomes active again.
-      // Do NOT put the whole app back into the loading gate for a token
-      // refresh: doing so temporarily unmounts GuestShowroom/AppInner,
-      // which resets their local navigation state (and can send employees
-      // back to Home). The existing profile remains valid during a token
-      // refresh, so keep the current UI mounted.
-      if (event === 'TOKEN_REFRESHED') {
-        setLoading(false);
-        return;
-      }
-
       // Keep the access gate in a loading state while the guest/employee
-      // profile is being fetched after an actual sign-in or account change.
-      if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
-        setLoading(true);
-        Promise.resolve().then(async () => {
-          await loadProfile(sess.user.id);
-          if (mounted) setLoading(false);
-        });
-        return;
-      }
-
-      // For other authenticated events, preserve the current screen.
-      setLoading(false);
+      // profile is being fetched. This prevents a valid guest login from
+      // briefly rendering the "profile not ready" screen.
+      setLoading(true);
+      Promise.resolve().then(async () => {
+        await loadProfile(sess.user.id);
+        if (mounted) setLoading(false);
+      });
     });
 
     return () => {

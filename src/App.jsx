@@ -86,26 +86,10 @@ function AppInner() {
   // ---------------- browser back/forward support ----------------
   const isPopRef = useRef(false);
   useEffect(() => {
-    // Preserve the current route if AppInner is remounted (for example after
-    // auth/profile state recovery when a backgrounded tab becomes active).
-    // Previously this always replaced the URL with #home, which made a tab
-    // opened on Showroom/Quotations jump back to Home after re-mounting.
-    const allowedViews = new Set([
-      'home', 'catalog', 'garments', 'add-product', 'add-garment',
-      'showroom', 'showroom-orders'
-    ]);
-    const currentHash = window.location.hash.replace(/^#/, '');
-    const initialView = allowedViews.has(currentHash) ? currentHash : 'home';
-    const currentState = window.history.state;
-    if (!currentState || currentState.view !== initialView) {
-      window.history.replaceState({ ...(currentState || {}), view: initialView }, '', '#' + initialView);
-    }
-    setViewState(initialView);
-
+    window.history.replaceState({ view: 'home' }, '', '#home');
     function onPop(e) {
       isPopRef.current = true;
-      const nextView = allowedViews.has(e.state?.view) ? e.state.view : 'home';
-      setViewState(nextView);
+      setViewState(e.state?.view || 'home');
     }
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
@@ -215,7 +199,7 @@ function AppInner() {
   }
 
   function openAddChoice() {
-    if (!permissions.canAdd) return showToast('Your account does not have permission to add products', 'error');
+    if (!permissions.canViewAddProduct) return showToast('Your account does not have access to Add Product', 'error');
     requireAuth(() => {
       dialogs.choiceDialog({
         title: 'What would you like to add?',
@@ -297,6 +281,33 @@ function AppInner() {
     showToast(wasEditing ? 'Changes saved' : 'Garment style added');
   }
 
+  const viewAllowed = {
+    home: permissions.canView,
+    catalog: permissions.canViewGeneral,
+    garments: permissions.canViewGarments,
+    'add-product': permissions.canViewAddProduct,
+    'add-garment': permissions.canViewAddProduct,
+    showroom: permissions.canViewShowroom,
+    'showroom-orders': permissions.canManageQuotations,
+  };
+
+  useEffect(() => {
+    if (viewAllowed[view] === false) navigate('home');
+  }, [view, role]);
+
+  if (viewAllowed[view] === false) {
+    return (
+      <div className="access-shell">
+        <div className="access-card">
+          <p className="access-eyebrow">Access restricted</p>
+          <h1>This section isn't available for your role.</h1>
+          <p className="access-subtitle">Your administrator can change your role from Users if you need access.</p>
+          <button type="button" className="access-submit" onClick={goHome}>Go to Home</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <header>
@@ -324,7 +335,7 @@ function AppInner() {
             </button>}
             {isAuthed ? (
               <>
-                <span className="who">Signed in · {role === 'super_admin' ? 'Super Admin' : role === 'admin' ? 'Admin' : role === 'editor' ? 'Editor' : role === 'quotation_manager' ? 'Quotation Manager' : 'Viewer'}</span>
+                <span className="who">Signed in · {({super_admin:'Super Admin',admin:'Admin',quotation_manager:'Quotation Manager',guest_manager:'Guest Manager',editor:'Editor',viewer:'Viewer',guest:'Guest'})[role] || 'Viewer'}</span>
                 <button className="btn" onClick={signOut}>Sign out</button>
               </>
             ) : (
@@ -333,11 +344,11 @@ function AppInner() {
           </div>
         </div>
         <nav className="tabs">
-          <button className={view === 'home' ? 'active' : ''} onClick={goHome}>🏠 Home</button>
-          <button className={view === 'catalog' ? 'active' : ''} onClick={() => { setCatalogFilters(null); navigate('catalog'); }}>General</button>
-          <button className={view === 'garments' ? 'active' : ''} onClick={() => { setGarmentFilters(null); navigate('garments'); }}>Garments</button>
-          {permissions.canAdd && <button className={(view === 'add-product' || view === 'add-garment') ? 'active' : ''} onClick={openAddChoice}>+ Add Product</button>}
-          {isEmployee && <button className={view === 'showroom' ? 'active' : ''} onClick={() => navigate('showroom')}>Showroom</button>}
+          {permissions.canView && <button className={view === 'home' ? 'active' : ''} onClick={goHome}>🏠 Home</button>}
+          {permissions.canViewGeneral && <button className={view === 'catalog' ? 'active' : ''} onClick={() => { setCatalogFilters(null); navigate('catalog'); }}>General</button>}
+          {permissions.canViewGarments && <button className={view === 'garments' ? 'active' : ''} onClick={() => { setGarmentFilters(null); navigate('garments'); }}>Garments</button>}
+          {permissions.canViewAddProduct && <button className={(view === 'add-product' || view === 'add-garment') ? 'active' : ''} onClick={openAddChoice}>+ Add Product</button>}
+          {permissions.canViewShowroom && <button className={view === 'showroom' ? 'active' : ''} onClick={() => navigate('showroom')}>Showroom</button>}
           {permissions.canManageQuotations && <button className={view === 'showroom-orders' ? 'active' : ''} onClick={() => navigate('showroom-orders')}>Quotation Requests</button>}
         </nav>
       </header>
@@ -382,6 +393,7 @@ function AppInner() {
             <AddProductForm
               products={products}
               editingProduct={editingProduct}
+              readOnly={!permissions.canAdd}
               onSaved={handleProductSaved}
               onCancel={() => { setEditingProduct(null); navigate('catalog'); }}
             />
@@ -409,7 +421,7 @@ function AppInner() {
             )}
           </div>
           <div style={{ display: view === 'showroom' ? 'block' : 'none' }}>
-            <ShowroomManager canEdit={permissions.canEdit} />
+            <ShowroomManager canEdit={permissions.canManageShowroom} canDelete={false} />
           </div>
           <div style={{ display: view === 'showroom-orders' ? 'block' : 'none' }}>
             <ShowroomOrders canManageQuotations={permissions.canManageQuotations} />
@@ -418,6 +430,7 @@ function AppInner() {
             <GarmentForm
               garments={garments}
               editingGroup={editingGarmentGroup}
+              readOnly={!permissions.canAdd}
               onSaved={handleGarmentSaved}
               onCancel={() => { setEditingGarmentGroup(null); navigate('garments'); }}
             />

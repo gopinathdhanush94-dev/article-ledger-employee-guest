@@ -58,8 +58,7 @@ begin
 
   if v_item.id is not null then
     if not v_item.visible then
-      -- Preserve the employee's current visibility choice. A hidden item must remain hidden.
-      update public.showroom_items set updated_at = now() where id = v_item.id;
+      update public.showroom_items set visible = true, updated_at = now() where id = v_item.id;
       v_item.visible := true;
     end if;
     return query select
@@ -114,7 +113,7 @@ begin
         sku_gw = v_product.sku_gw, sku_wt_unit = v_product.sku_wt_unit,
         dimensions = case when v_product.sku_l is not null and v_product.sku_w is not null and v_product.sku_h is not null
           then concat(v_product.sku_l, ' × ', v_product.sku_w, ' × ', v_product.sku_h, coalesce(' ' || nullif(v_product.sku_dim_unit, ''), '')) end,
-        updated_at = now()
+        visible = true, updated_at = now()
       where id = v_existing.id returning * into v_item;
     end if;
 
@@ -154,7 +153,7 @@ begin
         name = coalesce(nullif(trim(v_garment.excel_name), ''), nullif(trim(v_garment.customer_model), ''), name),
         brand = v_garment.brand, model = coalesce(v_garment.customer_model, v_garment.model_name, v_garment.model1),
         category = 'Garments', description = v_garment.description, image_url = v_garment.image_url,
-        updated_at = now()
+        visible = true, updated_at = now()
       where id = v_existing.id returning * into v_item;
     end if;
     return query select

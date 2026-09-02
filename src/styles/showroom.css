@@ -1105,9 +1105,3 @@
 .showroom-quotation-revision-bar .btn{flex:0 0 auto;white-space:nowrap}
 .showroom-delete-btn{border-color:#efc8c0;color:#c6533d}
 @media (max-width: 760px){.showroom-quotation-revision-bar{align-items:stretch;flex-direction:column;gap:10px}.showroom-quotation-revision-bar .btn{width:100%}}
-
-/* Showroom bulk visibility/featured controls */
-.showroom-manager-bulk-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
-.showroom-manager-bulk-actions button:nth-child(3) { border-color:#cfeee9; color:#087f75; background:#f4fbfa; }
-.showroom-manager-bulk-actions button:nth-child(4) { border-color:#e7d8c8; color:#8a5b32; background:#fffaf5; }
-@media (max-width: 900px) { .showroom-manager-actions { align-items:flex-start; gap:12px; flex-direction:column; } .showroom-manager-bulk-actions { justify-content:flex-start; } }

@@ -9,14 +9,13 @@ function nameFor(item) {
   return item?.name || item?.model || item?.article_no || 'Untitled product';
 }
 
-export default function ShowroomManager({ canEdit = false }) {
+export default function ShowroomManager({ canEdit = false, canDelete = false }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [type, setType] = useState('all');
   const [visibility, setVisibility] = useState('all');
-  const [category, setCategory] = useState('all');
   const [busyId, setBusyId] = useState(null);
   const [bulkBusy, setBulkBusy] = useState(false);
 
@@ -50,8 +49,6 @@ export default function ShowroomManager({ canEdit = false }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const categories = useMemo(() => Array.from(new Set(items.map(item => String(item.category || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b)), [items]);
-
   const stats = useMemo(() => ({
     total: items.length,
     visible: items.filter(x => x.visible).length,
@@ -65,13 +62,12 @@ export default function ShowroomManager({ canEdit = false }) {
       if (type !== 'all' && item.source_type !== type) return false;
       if (visibility === 'visible' && !item.visible) return false;
       if (visibility === 'hidden' && item.visible) return false;
-      if (category !== 'all' && String(item.category || '') !== category) return false;
       if (!q) return true;
       return [item.name, item.brand, item.model, item.category, item.ean, item.article_no]
         .filter(Boolean)
         .some(v => String(v).toLowerCase().includes(q));
     });
-  }, [items, search, type, visibility, category]);
+  }, [items, search, type, visibility]);
 
   async function updateItem(id, patch) {
     if (!canEdit) return;
@@ -90,55 +86,30 @@ export default function ShowroomManager({ canEdit = false }) {
     setBusyId(null);
   }
 
-  // Supabase/PostgREST can reject very large .in() requests with a browser
-  // "Failed to fetch" before the request even reaches the database. Keep
-  // bulk updates in small chunks so category-wide actions work for thousands
-  // of showroom rows.
-  async function bulkUpdateByIds(ids, patch) {
-    const chunkSize = 100;
-    for (let i = 0; i < ids.length; i += chunkSize) {
-      const chunk = ids.slice(i, i + chunkSize);
-      const { error: err } = await supabase
-        .from('showroom_items')
-        .update(patch)
-        .in('id', chunk);
-      if (err) throw err;
-    }
-  }
-
   async function setAllVisible(nextVisible) {
     if (!canEdit || !filtered.length) return;
     setBulkBusy(true);
     setError('');
     const ids = filtered.map(item => item.id);
-    try {
-      await bulkUpdateByIds(ids, { visible: nextVisible, ...(nextVisible ? {} : { featured: false }) });
-      const idSet = new Set(ids);
-      setItems(prev => prev.map(item => idSet.has(item.id)
-        ? { ...item, visible: nextVisible, ...(nextVisible ? {} : { featured: false }) }
-        : item));
-    } catch (err) {
-      setError(err?.message || 'Could not update showroom items');
-    } finally {
-      setBulkBusy(false);
-    }
+    const { error: err } = await supabase
+      .from('showroom_items')
+      .update({ visible: nextVisible })
+      .in('id', ids);
+    if (err) setError(err.message || 'Could not update showroom items');
+    else setItems(prev => prev.map(item => ids.includes(item.id) ? { ...item, visible: nextVisible } : item));
+    setBulkBusy(false);
   }
 
-  async function setAllFeatured(nextFeatured) {
-    if (!canEdit || !filtered.length) return;
-    setBulkBusy(true);
-    setError('');
-    const ids = filtered.filter(item => nextFeatured ? item.visible : true).map(item => item.id);
-    if (!ids.length) { setBulkBusy(false); return; }
-    try {
-      await bulkUpdateByIds(ids, { featured: nextFeatured });
-      const idSet = new Set(ids);
-      setItems(prev => prev.map(item => idSet.has(item.id) ? { ...item, featured: nextFeatured } : item));
-    } catch (err) {
-      setError(err?.message || 'Could not update featured items');
-    } finally {
-      setBulkBusy(false);
-    }
+  async function removeItem(id) {
+    if (!canDelete) return;
+    const item = items.find(x => x.id === id);
+    if (!item) return;
+    if (!window.confirm(`Remove “${nameFor(item)}” from the showroom? This does not delete the original catalogue record.`)) return;
+    setBusyId(id);
+    const { error: err } = await supabase.from('showroom_items').delete().eq('id', id);
+    if (err) setError(err.message || 'Could not remove showroom item');
+    else setItems(prev => prev.filter(x => x.id !== id));
+    setBusyId(null);
   }
 
   return (
@@ -147,7 +118,7 @@ export default function ShowroomManager({ canEdit = false }) {
         <div>
           <span className="showroom-manager-eyebrow">SHOWROOM CONTROL</span>
           <h1>Manage showroom</h1>
-          <p>All showroom items are visible to guests by default. Use category filters to quickly show, hide or feature groups of products.</p>
+          <p>Choose which catalogue items are visible to guests and which products deserve the Featured position.</p>
         </div>
         <button type="button" className="showroom-manager-refresh" onClick={load} disabled={loading}>↻ Refresh</button>
       </section>
@@ -176,20 +147,14 @@ export default function ShowroomManager({ canEdit = false }) {
               <option value="visible">Visible</option>
               <option value="hidden">Hidden</option>
             </select>
-            <select value={category} onChange={e => setCategory(e.target.value)} aria-label="Category filter">
-              <option value="all">All categories</option>
-              {categories.map(value => <option key={value} value={value}>{value}</option>)}
-            </select>
           </div>
         </div>
 
         <div className="showroom-manager-actions">
-          <span>{filtered.length} matching items{category !== 'all' ? ` · ${category}` : ''}</span>
-          {canEdit && <div className="showroom-manager-bulk-actions">
-            <button type="button" onClick={() => setAllVisible(true)} disabled={bulkBusy || !filtered.length}>Show all matching</button>
-            <button type="button" onClick={() => setAllVisible(false)} disabled={bulkBusy || !filtered.length}>Hide all matching</button>
-            <button type="button" onClick={() => setAllFeatured(true)} disabled={bulkBusy || !filtered.some(item => item.visible)}>Feature all matching</button>
-            <button type="button" onClick={() => setAllFeatured(false)} disabled={bulkBusy || !filtered.length}>Unfeature all matching</button>
+          <span>{filtered.length} matching items</span>
+          {canEdit && <div>
+            <button type="button" onClick={() => setAllVisible(true)} disabled={bulkBusy || !filtered.length}>Publish filtered</button>
+            <button type="button" onClick={() => setAllVisible(false)} disabled={bulkBusy || !filtered.length}>Hide filtered</button>
           </div>}
         </div>
 
@@ -202,7 +167,7 @@ export default function ShowroomManager({ canEdit = false }) {
             <table className="showroom-manager-table">
               <thead>
                 <tr>
-                  <th>Product</th><th>Type</th><th>Article / EAN</th><th>Category</th><th>Guest visibility</th><th>Featured</th>
+                  <th>Product</th><th>Type</th><th>Article / EAN</th><th>Category</th><th>Guest visibility</th><th>Featured</th>{canDelete && <th />}
                 </tr>
               </thead>
               <tbody>
@@ -236,6 +201,7 @@ export default function ShowroomManager({ canEdit = false }) {
                         onClick={() => updateItem(item.id, { featured: !item.featured })}
                       >★ {item.featured ? 'Featured' : 'Feature'}</button>
                     </td>
+                    {canDelete && <td><button type="button" className="showroom-remove" disabled={busyId === item.id} onClick={() => removeItem(item.id)}>Remove</button></td>}
                   </tr>
                 ))}
               </tbody>

@@ -13,7 +13,7 @@ const BLANK = {
   image_url: null,
 };
 
-export default function AddProductForm({ products, editingProduct, onSaved, onCancel }) {
+export default function AddProductForm({ products, editingProduct, onSaved, onCancel, readOnly = false }) {
   const dialogs = useDialogs();
   const [form, setForm] = useState(BLANK);
   const [ eanError, setEanError ] = useState('');
@@ -381,6 +381,8 @@ export default function AddProductForm({ products, editingProduct, onSaved, onCa
           {[['core','Core Details'],['commercial','Commercial'],['logistics','Logistics'],['media','Image']].map(([key,label])=><button type="button" key={key} className={editTab===key?'active':''} onClick={()=>setEditTab(key)}>{label}</button>)}
         </div>
         <form onSubmit={handleSubmit}>
+          {readOnly && <div className="um-readonly-banner">View only — your role can open Add Product, but cannot create or edit catalogue records.</div>}
+          <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
           {editTab==='core' && <div className="form-grid editor-section">
             <div className="field full"><div className="section-intro"><strong>Identity & classification</strong><span>Use the EAN as the unique product identity.</span></div></div>
             <div className="field"><label>Description <span className="req">*</span></label><input type="text" required value={form.description} onChange={e=>set('description',e.target.value)} placeholder="e.g. 5 Pcs Kitchen Tool Set" /></div>
@@ -419,11 +421,12 @@ export default function AddProductForm({ products, editingProduct, onSaved, onCa
             {imagePreview&&<div className="image-meta"><span>Preview ready</span><span>{imageFile?imageFile.name:'Existing image'}</span></div>}
           </div>}
 
-          <div className="form-footer editor-footer"><button type="button" className="btn" onClick={onCancel}>Cancel</button><div className="editor-footer-right">{editTab!=='core'&&<button type="button" className="btn" onClick={()=>setEditTab(editTab==='commercial'?'core':editTab==='logistics'?'commercial':'logistics')}>← Previous</button>}{editTab!=='media'&&<button type="button" className="btn btn-teal" onClick={()=>setEditTab(editTab==='core'?'commercial':editTab==='commercial'?'logistics':'media')}>Next →</button>}<button type="submit" className="btn btn-primary" disabled={saving}>{saving?'Saving…':form.id?'Save Changes':'Add Article'}</button></div></div>
+          </fieldset>
+          <div className="form-footer editor-footer"><button type="button" className="btn" onClick={onCancel}>Cancel</button><div className="editor-footer-right">{editTab!=='core'&&<button type="button" className="btn" onClick={()=>setEditTab(editTab==='commercial'?'core':editTab==='logistics'?'commercial':'logistics')}>← Previous</button>}{editTab!=='media'&&<button type="button" className="btn btn-teal" onClick={()=>setEditTab(editTab==='core'?'commercial':editTab==='commercial'?'logistics':'media')}>Next →</button>}{!readOnly && <button type="submit" className="btn btn-primary" disabled={saving}>{saving?'Saving…':form.id?'Save Changes':'Add Article'}</button>}</div></div>
         </form>
       </div>
 
-      {!form.id && <div className="form-card bulk-upload-card"><h2>Bulk Upload</h2><div className="sub">Add many articles at once from a CSV file. Invalid or duplicate EAN rows are skipped and listed below.</div><div className="controls-row" style={{marginBottom:6}}><label className="btn btn-primary" style={{cursor:'pointer'}}>⬆ Upload CSV<input type="file" accept=".csv" style={{display:'none'}} onChange={handleBulkFile}/></label><button type="button" className="btn" onClick={downloadBulkTemplate}>⬇ Download CSV template</button></div>{bulkProgress&&<div style={{marginTop:14}}><div className="bulk-progress-label"><span>Uploading…</span><span>{bulkProgress.current} / {bulkProgress.total}</span></div><div className="bar-track" style={{height:10}}><div className="bar-fill" style={{width:`${bulkProgress.total?Math.round((bulkProgress.current/bulkProgress.total)*100):0}%`}}/></div></div>}{bulkResult.length>0&&<div style={{fontFamily:"'Inter',sans-serif",fontSize:12,marginTop:12}}><div style={{fontWeight:600}}>{bulkResult.filter(r=>r.ok).length} added · {bulkResult.filter(r=>!r.ok).length} skipped</div>{bulkResult.map((r,i)=><div key={i} className={`bulk-row ${r.ok?'ok':'skip'}`}><span>{r.label}</span><span>{r.msg}</span></div>)}</div>}</div>}
+      {!readOnly && !form.id && <div className="form-card bulk-upload-card"><h2>Bulk Upload</h2><div className="sub">Add many articles at once from a CSV file. Invalid or duplicate EAN rows are skipped and listed below.</div><div className="controls-row" style={{marginBottom:6}}><label className="btn btn-primary" style={{cursor:'pointer'}}>⬆ Upload CSV<input type="file" accept=".csv" style={{display:'none'}} onChange={handleBulkFile}/></label><button type="button" className="btn" onClick={downloadBulkTemplate}>⬇ Download CSV template</button></div>{bulkProgress&&<div style={{marginTop:14}}><div className="bulk-progress-label"><span>Uploading…</span><span>{bulkProgress.current} / {bulkProgress.total}</span></div><div className="bar-track" style={{height:10}}><div className="bar-fill" style={{width:`${bulkProgress.total?Math.round((bulkProgress.current/bulkProgress.total)*100):0}%`}}/></div></div>}{bulkResult.length>0&&<div style={{fontFamily:"'Inter',sans-serif",fontSize:12,marginTop:12}}><div style={{fontWeight:600}}>{bulkResult.filter(r=>r.ok).length} added · {bulkResult.filter(r=>!r.ok).length} skipped</div>{bulkResult.map((r,i)=><div key={i} className={`bulk-row ${r.ok?'ok':'skip'}`}><span>{r.label}</span><span>{r.msg}</span></div>)}</div>}</div>}
     </div>
   );
 

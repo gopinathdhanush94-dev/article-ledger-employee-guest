@@ -119,6 +119,14 @@ function GuestLanding() {
 export default function AccessGate({ children }) {
   const { session, profile, loading, isGuest, isEmployee, isPending, isDisabled, signOut } = useAuth();
   const [role, setRole] = useState(null);
+  const qrCode = new URLSearchParams(window.location.search).get('qr')
+    || new URLSearchParams(window.location.search).get('product')
+    || new URLSearchParams(window.location.search).get('ean');
+
+  // Printed showroom QR labels are deliberately a view-only public entry
+  // point. This must be checked before the employee/guest login gate so a
+  // customer scanning a physical label can see the product immediately.
+  if (qrCode) return <GuestShowroom />;
 
   if (loading) {
     return <div className="access-shell"><div className="access-card"><div className="access-spinner" /><p>Checking your access…</p></div></div>;

@@ -624,6 +624,11 @@ export default function GuestShowroom() {
   const [cartQuantities, setCartQuantities] = useState(() => { try { return JSON.parse(localStorage.getItem('g-records-showroom-cart-quantities') || '{}'); } catch { return {}; } });
   const [popup, setPopup] = useState(null);
 
+  const directQrCode = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('qr') || params.get('product') || params.get('ean') || '';
+  }, []);
+
   // Mobile Safari/Brave back-swipe support: every in-app detail/popup gets a
   // history entry. A browser back gesture therefore closes the top layer instead
   // of leaving the showroom page. The URL itself is unchanged.
@@ -707,10 +712,23 @@ export default function GuestShowroom() {
   const load = async () => {
     setLoading(true);
     setError('');
-    const pageSize = 1000;
-    const all = [];
-    let from = 0;
     try {
+      // QR labels use a guest-safe public lookup so a customer can scan the
+      // printed label and open the exact showroom product without needing to
+      // sign in first. Only visible showroom-safe fields are returned.
+      if (directQrCode) {
+        const { data, error: qrError } = await supabase.rpc('public_lookup_showroom_product', { p_code: String(directQrCode) });
+        if (qrError) throw qrError;
+        const item = Array.isArray(data) ? data[0] : data;
+        if (!item?.id) throw new Error('This QR code is not linked to a visible showroom product.');
+        setItems([item]);
+        setSelected(item);
+        return;
+      }
+
+      const pageSize = 1000;
+      const all = [];
+      let from = 0;
       while (true) {
         const { data, error: err } = await supabase
           .from('showroom_items')
@@ -748,13 +766,11 @@ export default function GuestShowroom() {
   }, [session?.user?.id]);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('product') || params.get('ean') || params.get('qr');
-    if (!code || !items.length) return;
-    const normalized = String(code).trim().toLowerCase().replace(/\s+/g, '');
+    if (!directQrCode || !items.length || selected) return;
+    const normalized = String(directQrCode).trim().toLowerCase().replace(/\s+/g, '');
     const found = items.find(item => [item.ean, item.article_no, item.model, item.id].filter(Boolean).some(v => String(v).trim().toLowerCase().replace(/\s+/g, '') === normalized));
     if (found) setSelected(found);
-  }, [items]);
+  }, [directQrCode, items, selected]);
 
   useEffect(() => {
     const onKeyDown = event => {

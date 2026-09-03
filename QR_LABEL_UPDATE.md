@@ -1,24 +1,26 @@
-# Showroom QR Label Generator
+# Showroom QR Labels — Customer View
 
-The Employee Showroom Manager now supports printable QR labels for selected physical showroom articles.
+The Showroom manager can select physically available products and download 10 cm × 5 cm QR labels.
 
-## Workflow
-1. Open **Showroom** in Employee access.
-2. Tick the products physically present in the showroom.
-3. Use **Generate QR Labels**.
-4. Review the selected labels.
-5. Download the PDF.
-6. Print at **10 cm × 5 cm** and place each label with its product.
+Each label contains the QR code, Article/SKU, Model, Description, L × B × H, MRP and EAN.
 
-Each PDF page is exactly 100 mm × 50 mm and contains:
-- QR code that opens the guest showroom product details for that article
-- Article / SKU number
-- Model
-- Description
-- L × B × H SKU dimension details
-- MRP
-- EAN (when available)
+The QR code now stores the product's EAN (or Article No./Model as fallback), rather than the internal showroom UUID. This makes the printed code readable by both the Guest scanner and the Employee scanner.
 
-MRP is read only when the employee generates the labels from the internal `products` / `garments` tables. It is not added to the guest showroom data returned by `GuestShowroom`.
+When a customer scans a printed label, the app opens the same **Guest Showroom product-detail view** directly. No employee/internal catalogue is exposed. The QR landing view is read-only and only returns products marked `visible = true`.
 
-No Supabase migration is required for this feature.
+## Required Supabase migration
+
+Run:
+
+`supabase/public_showroom_qr_lookup.sql`
+
+This creates `public.public_lookup_showroom_product(text)` as a `SECURITY DEFINER` function and grants it to `anon` and `authenticated`. It returns only showroom-safe fields and never returns MRP/pricing.
+
+## Behaviour
+
+- Employee Showroom: select rows → Generate QR Labels → Download PDF.
+- Customer phone camera: scans QR → opens exact product in Guest Showroom detail view.
+- Guest scanner: EAN/Article/Model QR payload resolves to the same product.
+- Employee scanner: the EAN/Article/Model QR payload resolves against the internal catalogue.
+- Hidden showroom rows are not exposed by the public QR URL.
+- Scanning never changes `visible` or `featured` state.

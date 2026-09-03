@@ -124,7 +124,8 @@ export function createQrLabelPdf(items, { origin = window.location.origin } = {}
   if (!Array.isArray(items) || !items.length) throw new Error('Select at least one showroom item.');
 
   const pages = items.map(item => {
-    const params = new URLSearchParams({ product: String(item.id) });
+    const qrCode = item?.ean || item?.article_no || item?.model || item?.id;
+    const params = new URLSearchParams({ qr: String(qrCode || '') });
     const qrUrl = `${origin.replace(/\/$/, '')}/?${params.toString()}`;
     return buildLabelStream(item, qrUrl);
   });

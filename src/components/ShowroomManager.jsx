@@ -179,7 +179,7 @@ export default function ShowroomManager({ canEdit = false }) {
     }
   }
 
-  function downloadQrLabels() {
+  async function downloadQrLabels() {
     if (!qrItems.length || qrDownloading) return;
     setQrDownloading(true);
     setQrError('');

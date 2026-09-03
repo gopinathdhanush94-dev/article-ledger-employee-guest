@@ -90,7 +90,7 @@ export function useAuth() {
       }
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, sess) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, sess) => {
       if (!mounted) return;
       setSession(sess || null);
       if (!sess) {
@@ -98,14 +98,26 @@ export function useAuth() {
         if (initialised) setLoading(false);
         return;
       }
-      // Keep the access gate in a loading state while the guest/employee
-      // profile is being fetched. This prevents a valid guest login from
-      // briefly rendering the "profile not ready" screen.
-      setLoading(true);
-      Promise.resolve().then(async () => {
-        await loadProfile(sess.user.id);
-        if (mounted) setLoading(false);
-      });
+
+      // TOKEN_REFRESHED happens routinely when the user returns to an
+      // existing browser tab/app. Do NOT put the access gate back into its
+      // loading/unmount state for a token refresh: doing so destroys the
+      // current screen and makes the app fall back to Home.
+      if (event === 'TOKEN_REFRESHED') {
+        // Keep the existing profile/UI mounted. Supabase has already
+        // refreshed the session; there is no reason to re-run the access gate.
+        return;
+      }
+
+      // SIGNED_IN can represent a newly authenticated user, so load the
+      // profile before releasing the access gate.
+      if (event === 'SIGNED_IN') {
+        setLoading(true);
+        Promise.resolve().then(async () => {
+          await loadProfile(sess.user.id);
+          if (mounted) setLoading(false);
+        });
+      }
     });
 
     return () => {

@@ -610,15 +610,20 @@ function ProductDetail({ item, onBack, onScanAnother, isFavourite, inCart, onTog
 
 export default function GuestShowroom() {
   const { signOut, profile, session } = useAuth();
+  const guestStateKey = `article-ledger:guest-state:${session?.user?.id || 'anonymous'}`;
+  const savedGuestState = (() => {
+    try { return JSON.parse(sessionStorage.getItem(guestStateKey) || '{}'); } catch { return {}; }
+  })();
+
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
-  const [category, setCategory] = useState('All');
+  const [search, setSearch] = useState(savedGuestState.search || '');
+  const [category, setCategory] = useState(savedGuestState.category || 'All');
   const [selected, setSelected] = useState(null);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [orderHistoryOpen, setOrderHistoryOpen] = useState(false);
-  const [collectionMode, setCollectionMode] = useState('all');
+  const [collectionMode, setCollectionMode] = useState(savedGuestState.collectionMode || 'all');
   const [favourites, setFavourites] = useState(() => { try { return JSON.parse(localStorage.getItem('g-records-showroom-favourites') || '[]'); } catch { return []; } });
   const [cart, setCart] = useState(() => { try { return JSON.parse(localStorage.getItem('g-records-showroom-cart') || '[]'); } catch { return []; } });
   const [cartQuantities, setCartQuantities] = useState(() => { try { return JSON.parse(localStorage.getItem('g-records-showroom-cart-quantities') || '{}'); } catch { return {}; } });
@@ -629,6 +634,11 @@ export default function GuestShowroom() {
     return params.get('qr') || params.get('product') || params.get('ean') || '';
   }, []);
 
+  useEffect(() => {
+    if (directQrCode || !items.length || selected || !savedGuestState.selectedId) return;
+    const restored = items.find(item => String(item.id) === String(savedGuestState.selectedId));
+    if (restored) setSelected(restored);
+  }, [directQrCode, items, selected, savedGuestState.selectedId]);
   // Mobile Safari/Brave back-swipe support: every in-app detail/popup gets a
   // history entry. A browser back gesture therefore closes the top layer instead
   // of leaving the showroom page. The URL itself is unchanged.
@@ -666,6 +676,21 @@ export default function GuestShowroom() {
   useEffect(() => { localStorage.setItem('g-records-showroom-favourites', JSON.stringify(favourites)); }, [favourites]);
   useEffect(() => { localStorage.setItem('g-records-showroom-cart', JSON.stringify(cart)); }, [cart]);
   useEffect(() => { localStorage.setItem('g-records-showroom-cart-quantities', JSON.stringify(cartQuantities)); }, [cartQuantities]);
+
+  // Preserve the guest's showroom position across a browser reload/tab
+  // suspension. The Supabase session remains the source of truth for access;
+  // this only restores non-sensitive UI state.
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(guestStateKey, JSON.stringify({
+        selectedId: selected?.id || null,
+        search,
+        category,
+        collectionMode,
+      }));
+    } catch {}
+  }, [guestStateKey, selected?.id, search, category, collectionMode]);
+
 
   // Local storage can contain IDs from an older showroom dataset. Once the
   // current showroom rows are loaded, remove those stale IDs so the header

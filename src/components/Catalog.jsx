@@ -8,12 +8,15 @@ import { useHideOnScroll } from '../lib/useHideOnScroll.js';
 import CatalogueExport from './CatalogueExport.jsx';
 
 export default function Catalog({ products, initialFilters, onEdit, onDelete, isAuthed, lookupCode }) {
-  const [q, setQ] = useState('');
+  const savedState = (() => {
+    try { return JSON.parse(sessionStorage.getItem('article-ledger:catalog-state') || '{}'); } catch { return {}; }
+  })();
+  const [q, setQ] = useState(savedState.q || '');
   const [searchFocused, setSearchFocused] = useState(false);
-  const [cat, setCat] = useState('');
-  const [brand, setBrand] = useState('');
-  const [month, setMonth] = useState('');
-  const [year, setYear] = useState('');
+  const [cat, setCat] = useState(savedState.cat || '');
+  const [brand, setBrand] = useState(savedState.brand || '');
+  const [month, setMonth] = useState(savedState.month || '');
+  const [year, setYear] = useState(savedState.year || '');
   const [selected, setSelected] = useState(null);
   const [showCatalogueExport, setShowCatalogueExport] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
@@ -30,6 +33,20 @@ export default function Catalog({ products, initialFilters, onEdit, onDelete, is
       setAutoOpenPending(!!initialFilters.autoOpen);
     }
   }, [initialFilters]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('article-ledger:catalog-state', JSON.stringify({
+        q, cat, brand, month, year, selectedId: selected?.id || null,
+      }));
+    } catch {}
+  }, [q, cat, brand, month, year, selected?.id]);
+
+  useEffect(() => {
+    if (!products.length || selected || !savedState.selectedId) return;
+    const restored = products.find(product => String(product.id) === String(savedState.selectedId));
+    if (restored) setSelected(restored);
+  }, [products, selected, savedState.selectedId]);
 
   // Each filter's dropdown is calculated from the other active filters.
   // This keeps the choices mutually consistent instead of showing the full

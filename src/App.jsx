@@ -83,13 +83,35 @@ function AppInner() {
   const [garmentFilters, setGarmentFilters] = useState(null);
   const [editingGarmentGroup, setEditingGarmentGroup] = useState(null);
 
-  // ---------------- browser back/forward support ----------------
+  // ---------------- browser back/forward + reload/tab restore ----------------
   const isPopRef = useRef(false);
   useEffect(() => {
-    window.history.replaceState({ view: 'home' }, '', '#home');
+    // Never overwrite an existing route when AppInner mounts again (for
+    // example after a browser/tab restore). The hash is our durable route
+    // bookmark, while sessionStorage also protects against a history entry
+    // that has been recreated by the browser.
+    const validViews = new Set(['home', 'catalog', 'garments', 'add-product', 'add-garment', 'showroom', 'showroom-orders']);
+    const hashView = String(window.location.hash || '').replace(/^#/, '');
+    let savedView = '';
+    try { savedView = sessionStorage.getItem('article-ledger:view') || ''; } catch {}
+    const initialView = validViews.has(hashView) ? hashView : (validViews.has(savedView) ? savedView : 'home');
+
+    const currentState = window.history.state || {};
+    if (!currentState.view || currentState.view !== initialView) {
+      window.history.replaceState({ ...currentState, view: initialView }, '', '#' + initialView);
+    }
+    setViewState(initialView);
+    try { sessionStorage.setItem('article-ledger:view', initialView); } catch {}
+
     function onPop(e) {
       isPopRef.current = true;
-      setViewState(e.state?.view || 'home');
+      const next = validViews.has(e.state?.view) ? e.state.view : (
+        validViews.has(String(window.location.hash || '').replace(/^#/, ''))
+          ? String(window.location.hash).replace(/^#/, '')
+          : 'home'
+      );
+      try { sessionStorage.setItem('article-ledger:view', next); } catch {}
+      setViewState(next);
     }
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
@@ -97,9 +119,10 @@ function AppInner() {
 
   function navigate(nextView) {
     if (!isPopRef.current) {
-      window.history.pushState({ view: nextView }, '', '#' + nextView);
+      window.history.pushState({ ...(window.history.state || {}), view: nextView }, '', '#' + nextView);
     }
     isPopRef.current = false;
+    try { sessionStorage.setItem('article-ledger:view', nextView); } catch {}
     setViewState(nextView);
   }
 

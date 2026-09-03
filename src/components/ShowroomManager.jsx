@@ -14,29 +14,26 @@ function QrLabelPreview({ item }) {
   const quiet = 4;
   const total = count + quiet * 2;
   const description = item?.description || item?.name || item?.model || 'Product';
-  const lines = wrapPreviewText(description, 42).slice(0, 2);
+  const lines = wrapPreviewText(description, 28).slice(0, 3);
   return (
     <div className="showroom-qr-label-preview">
+      <div className="showroom-qr-label-topline"><img src="/g-logo.png" alt="G" /><span>SHOWROOM PRODUCT LABEL</span></div>
       <div className="showroom-qr-svg-wrap">
         <svg viewBox={`0 0 ${total} ${total}`} role="img" aria-label={`QR code for ${item?.article_no || item?.model || 'article'}`} shapeRendering="crispEdges">
           <rect width={total} height={total} fill="white" />
           {matrix.map((row, r) => row.map((dark, c) => dark ? <rect key={`${r}-${c}`} x={c + quiet} y={r + quiet} width="1" height="1" fill="black" /> : null))}
         </svg>
-        <small>SCAN FOR PRODUCT DETAILS</small>
       </div>
       <div className="showroom-qr-label-info">
-        <div className="showroom-qr-label-meta"><span>ARTICLE / SKU</span><strong>{item.article_no || item.ean || '—'}</strong></div>
-        {item.model && <div className="showroom-qr-model">MODEL: {item.model}</div>}
+        <div className="showroom-qr-label-meta"><strong>{item.article_no || item.ean || '—'}</strong>{item.model && <span>{item.model}</span>}</div>
         <div className="showroom-qr-description">{lines.map((line, i) => <div key={i}>{line}</div>)}</div>
         <div className="showroom-qr-spec"><span>L × B × H</span><strong>{dimensionsFor(item)}</strong></div>
-        <div className="showroom-qr-spec"><span>MRP</span><strong>{money(item.mrp)}</strong></div>
-        {item.ean && <div className="showroom-qr-ean">EAN: {item.ean}</div>}
+        <div className="showroom-qr-ean">EAN: {item.ean || '—'}</div>
       </div>
-      <div className="showroom-qr-brand">G-RECORDS<br /><small>ARTICLE LEDGER</small></div>
+      <div className="showroom-qr-mrp"><span>MRP</span><strong>{money(item.mrp)}</strong></div>
     </div>
   );
 }
-
 function wrapPreviewText(value, maxChars) {
   const words = String(value || '').replace(/[\r\n]+/g, ' ').trim().split(/\s+/).filter(Boolean);
   const lines = [];
@@ -187,7 +184,7 @@ export default function ShowroomManager({ canEdit = false }) {
     setQrDownloading(true);
     setQrError('');
     try {
-      createQrLabelPdf(qrItems);
+      await createQrLabelPdf(qrItems);
     } catch (err) {
       setQrError(err?.message || 'Could not generate the QR label PDF.');
     } finally {
@@ -272,13 +269,13 @@ export default function ShowroomManager({ canEdit = false }) {
               <>
                 <div className="showroom-qr-instructions">
                   <strong>10 cm × 5 cm printable label</strong>
-                  <span>Each selected article gets one separate PDF page. The QR opens the guest showroom product details.</span>
+                  <span>A4 print sheet: 2 columns × 5 rows, with each label exactly 10 cm × 5 cm. The QR opens the guest showroom product details.</span>
                 </div>
                 <div className="showroom-qr-preview-list">
                   {qrItems.map(item => <QrLabelPreview key={item.id} item={item} />)}
                 </div>
                 <div className="showroom-qr-modal-foot">
-                  <span>{qrItems.length} label{qrItems.length === 1 ? '' : 's'} ready</span>
+                  <span>{qrItems.length} label{qrItems.length === 1 ? '' : 's'} ready · A4 packs 10 labels per sheet</span>
                   <div>
                     <button type="button" className="btn" onClick={() => setQrOpen(false)}>Close</button>
                     <button type="button" className="btn btn-teal showroom-qr-download" onClick={downloadQrLabels} disabled={!qrItems.length || qrDownloading}>{qrDownloading ? 'Generating…' : '↓ Download PDF'}</button>

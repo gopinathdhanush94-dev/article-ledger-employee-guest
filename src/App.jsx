@@ -185,6 +185,56 @@ function AppInner() {
     return err;
   }
 
+  // QR labels are designed to work from both Guest and Employee access.
+  // The Employee scanner first checks the already-loaded catalogue, then uses
+  // exact server-side lookups so an article outside the current UI filter is
+  // still found.
+  const lookupEmployeeCode = useCallback(async (raw) => {
+    const value = String(raw || '').trim();
+    if (!value) return null;
+    const candidates = [];
+    try {
+      const url = new URL(value);
+      ['qr', 'product', 'ean', 'article', 'model'].forEach(key => {
+        const v = url.searchParams.get(key);
+        if (v) candidates.push(v);
+      });
+    } catch (_) {}
+    candidates.push(value);
+
+    const seen = new Set();
+    for (const candidate of candidates) {
+      const code = String(candidate).trim();
+      const key = code.toLowerCase();
+      if (!code || seen.has(key)) continue;
+      seen.add(key);
+
+      for (const field of ['ean', 'article_no', 'model']) {
+        const { data, error } = await supabase.from('products').select('*').eq(field, code).limit(1);
+        if (error) throw error;
+        if (data?.[0]) return data[0];
+      }
+
+      // If the QR was generated from a showroom item, resolve its source
+      // product without requiring the employee to change tabs or filters.
+      for (const field of ['ean', 'article_no', 'model']) {
+        const { data: showroomRows, error: showroomError } = await supabase
+          .from('showroom_items')
+          .select('source_type,source_id')
+          .eq(field, code)
+          .limit(1);
+        if (showroomError) throw showroomError;
+        const sourceId = showroomRows?.[0]?.source_id;
+        if (showroomRows?.[0]?.source_type === 'product' && sourceId) {
+          const { data, error } = await supabase.from('products').select('*').eq('id', sourceId).limit(1);
+          if (error) throw error;
+          if (data?.[0]) return data[0];
+        }
+      }
+    }
+    return null;
+  }, []);
+
   // ---------------- navigation actions ----------------
   function goHome() { navigate('home'); }
 
@@ -385,6 +435,7 @@ function AppInner() {
               onEdit={permissions.canEdit ? openEditForm : undefined}
               onDelete={permissions.canDelete ? deleteProduct : undefined}
               isAuthed={isAuthed}
+              lookupCode={lookupEmployeeCode}
               canEdit={permissions.canEdit}
               canDelete={permissions.canDelete}
             />

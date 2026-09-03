@@ -8,9 +8,10 @@ const CHUNK_SIZE = 100;
 
 
 function QrLabelPreview({ item }) {
-  const matrix = useMemo(() => qrMatrix(`${window.location.origin.replace(/\/$/, '')}/?product=${encodeURIComponent(item.id)}`), [item.id]);
+  const qrCode = item?.ean || item?.article_no || item?.model || item?.id || '';
+  const matrix = useMemo(() => qrMatrix(`${window.location.origin.replace(/\/$/, '')}/?qr=${encodeURIComponent(qrCode)}`), [qrCode]);
   const count = matrix.length;
-  const quiet = 2;
+  const quiet = 4;
   const total = count + quiet * 2;
   const description = item?.description || item?.name || item?.model || 'Product';
   const lines = wrapPreviewText(description, 42).slice(0, 2);

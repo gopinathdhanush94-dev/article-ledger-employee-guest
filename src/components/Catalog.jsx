@@ -7,7 +7,7 @@ import ScannerModal from './ScannerModal.jsx';
 import { useHideOnScroll } from '../lib/useHideOnScroll.js';
 import CatalogueExport from './CatalogueExport.jsx';
 
-export default function Catalog({ products, initialFilters, onEdit, onDelete, isAuthed }) {
+export default function Catalog({ products, initialFilters, onEdit, onDelete, isAuthed, lookupCode }) {
   const [q, setQ] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [cat, setCat] = useState('');
@@ -291,7 +291,7 @@ export default function Catalog({ products, initialFilters, onEdit, onDelete, is
       )}
 
       {showCatalogueExport && <CatalogueExport type="general" rows={filtered} onClose={() => setShowCatalogueExport(false)} />}
-      {showScanner && <ScannerModal products={products} onClose={() => setShowScanner(false)} onScan={(product) => { setShowScanner(false); setQ(String(product.ean || product.article_no || product.model || '')); setSelected(product); }} />}
+      {showScanner && <ScannerModal products={products} lookupCode={lookupCode} onClose={() => setShowScanner(false)} onScan={(product) => { setShowScanner(false); setQ(String(product.ean || product.article_no || product.model || '')); setSelected(product); }} />}
     </>
   );
 }

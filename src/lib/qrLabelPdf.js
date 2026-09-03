@@ -62,7 +62,7 @@ function money(value) {
 
 function drawQr(ops, matrix, x, top, size) {
   const count = matrix.length;
-  const quiet = 2;
+  const quiet = 4;
   const cell = size / (count + quiet * 2);
   ops.push(`q 1 1 1 rg ${x} ${PAGE_H - top - size} ${size} ${size} re f Q`);
   ops.push(`q 0 0 0 rg`);
@@ -89,7 +89,9 @@ function buildLabelStream(item, qrUrl) {
   rect(0, 0, 3.5, PAGE_H, ORANGE);
   rect(3.5, 0, 96.5, 8, LIGHT);
   bold('G-RECORDS  |  ARTICLE LEDGER', 8, 5.5, 5.6, ORANGE);
-  const qrSize = 30.5;
+  const qrSize = 34;
+  // Keep a full standards-compliant quiet zone around the QR modules so
+  // phone cameras can decode labels reliably after printing/scaling.
   const qrX = 7;
   const qrTop = 10.5;
   drawQr(ops, qrMatrix(qrUrl), qrX, qrTop, qrSize);

@@ -855,7 +855,7 @@ export default function GuestShowroom() {
   }
 
   async function lookupGuestCode(raw) {
-    const { data, error: lookupError } = await supabase.rpc('guest_lookup_showroom_product_v2', { p_code: String(raw || '') });
+    const { data, error: lookupError } = await supabase.rpc('public_lookup_showroom_product', { p_code: String(raw || '') });
     if (lookupError) {
       console.warn('Guest barcode lookup failed:', lookupError.message);
       return null;

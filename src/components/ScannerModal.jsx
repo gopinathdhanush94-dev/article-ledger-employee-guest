@@ -89,20 +89,34 @@ export default function ScannerModal({ onClose, onScan, products, lookupCode }) 
   const findProduct = (raw) => {
     const value = String(raw || '').trim();
     if (!value) return null;
-    const normalized = normalize(value);
 
-    const exact = products.find(p =>
-      [p.ean, p.article_no, p.model, p.hsn, p.id]
-        .filter(v => v !== null && v !== undefined && String(v).trim() !== '')
-        .some(v => normalize(v) === normalized)
-    );
-    if (exact) return exact;
+    // QR labels contain a URL such as https://.../?qr=EAN. Extract the QR
+    // parameter first so both the Guest and Employee scanners use the exact
+    // same lookup key. Fall back to the raw value for normal barcodes/readers.
+    const candidates = [];
+    try {
+      const url = new URL(value);
+      ['qr', 'product', 'ean', 'article', 'model'].forEach(key => {
+        const v = url.searchParams.get(key);
+        if (v) candidates.push(v);
+      });
+    } catch (_) {}
+    candidates.push(value);
 
-    // QR payloads may contain a URL or text. Try 8–14 digit numeric candidates.
-    const digits = value.match(/\d{8,14}/g) || [];
-    for (const token of digits) {
-      const hit = products.find(p => String(p.ean || '').replace(/\D/g, '') === token);
-      if (hit) return hit;
+    for (const candidate of candidates) {
+      const normalized = normalize(candidate);
+      const exact = products.find(p =>
+        [p.ean, p.article_no, p.model, p.hsn, p.id]
+          .filter(v => v !== null && v !== undefined && String(v).trim() !== '')
+          .some(v => normalize(v) === normalized)
+      );
+      if (exact) return exact;
+
+      const digits = String(candidate).match(/\d{8,14}/g) || [];
+      for (const token of digits) {
+        const hit = products.find(p => String(p.ean || '').replace(/\D/g, '') === token);
+        if (hit) return hit;
+      }
     }
     return null;
   };

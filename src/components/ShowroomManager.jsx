@@ -14,10 +14,9 @@ function QrLabelPreview({ item }) {
   const quiet = 4;
   const total = count + quiet * 2;
   const description = item?.description || item?.name || item?.model || 'Product';
-  const lines = wrapPreviewText(description, 28).slice(0, 3);
+  const lines = wrapPreviewText(description, 26).slice(0, 2);
   return (
     <div className="showroom-qr-label-preview">
-      <div className="showroom-qr-label-topline"><img src="/g-logo.png" alt="G" /><span>SHOWROOM PRODUCT LABEL</span></div>
       <div className="showroom-qr-svg-wrap">
         <svg viewBox={`0 0 ${total} ${total}`} role="img" aria-label={`QR code for ${item?.article_no || item?.model || 'article'}`} shapeRendering="crispEdges">
           <rect width={total} height={total} fill="white" />
@@ -25,8 +24,8 @@ function QrLabelPreview({ item }) {
         </svg>
       </div>
       <div className="showroom-qr-label-info">
-        <div className="showroom-qr-label-meta"><strong>{item.article_no || item.ean || '—'}</strong>{item.model && <span>{item.model}</span>}</div>
         <div className="showroom-qr-description">{lines.map((line, i) => <div key={i}>{line}</div>)}</div>
+        {item.model && <div className="showroom-qr-model">MODEL: {item.model}</div>}
         <div className="showroom-qr-spec"><span>L × B × H</span><strong>{dimensionsFor(item)}</strong></div>
         <div className="showroom-qr-ean">EAN: {item.ean || '—'}</div>
       </div>

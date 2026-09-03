@@ -122,13 +122,9 @@ function labelStream(item, qrUrl, logoName = null, x0, top0) {
 
   rect(x0, top0, LABEL_W, LABEL_H, WHITE);
   strokeRect(x0 + .4, top0 + .4, LABEL_W - .8, LABEL_H - .8, BORDER, .65);
+  // Simple web-app theme accent; no logo or extra wording on the physical label.
   rect(x0, top0, LABEL_W, 2.8 * MM, NAVY);
   rect(x0 + LABEL_W - 18 * MM, top0, 18 * MM, 2.8 * MM, BLUE);
-
-  if (logoName) {
-    const lw = 6.5 * MM, lh = 6.5 * MM;
-    add(`q ${lw.toFixed(3)} 0 0 ${lh.toFixed(3)} ${(x0 + 4 * MM).toFixed(3)} ${(A4_H - (top0 + 9.0 * MM)).toFixed(3)} cm /${logoName} Do Q`);
-  }
 
   const qrSize = 31 * MM;
   const qrX = x0 + 5 * MM;
@@ -136,28 +132,25 @@ function labelStream(item, qrUrl, logoName = null, x0, top0) {
   drawQr(ops, qrMatrix(qrUrl), qrX, qrTop, qrSize);
 
   const contentX = x0 + 40 * MM;
-  const contentW = 55 * MM;
-  const article = plain(item?.article_no || item?.ean || item?.id || '-');
-  const model = plain(item?.model || '');
-  const description = plain(item?.description || item?.name || item?.model || 'Product');
-  const descLines = wrapText(description, 29).slice(0, 3);
-
-  // Small SKU badge, while keeping the product description visually dominant.
-  rect(contentX, top0 + 5 * MM, Math.min(contentW, 32 * MM), 5.8 * MM, PALE_BLUE);
-  bold(`SKU: ${article}`, contentX + 2.2 * MM, top0 + 8.9 * MM, 7.2, BLUE);
-
-  descLines.forEach((lineText, i) => bold(lineText, contentX, top0 + 16.5 * MM + i * 5.0 * MM, i === 0 ? 12.2 : 10.4, NAVY));
-  if (model && model !== '-') text(`MODEL: ${model}`, contentX, top0 + 32 * MM, 6.5, MUTED, 'F2');
-
-  line(contentX, top0 + 35 * MM, x0 + LABEL_W - 5 * MM, top0 + 35 * MM, [221, 228, 238], .45);
-  text('DIMENSIONS (L x B x H)', contentX, top0 + 39.0 * MM, 5.5, MUTED, 'F2');
-  bold(dimensionsFor(item), contentX, top0 + 43.0 * MM, 7.0, NAVY);
-  text(`EAN: ${plain(item?.ean || '-')}`, contentX, top0 + 47.0 * MM, 5.8, MUTED, 'F1');
-
-  // Prominent MRP block on the right/bottom.
   const mrpX = x0 + 76 * MM;
-  text('MRP', mrpX, top0 + 38.8 * MM, 6.0, BLUE, 'F2');
-  bold(money(item?.mrp), mrpX, top0 + 46.2 * MM, 14.5, NAVY);
+  const description = plain(item?.description || item?.name || item?.model || 'Product');
+  const descLines = wrapText(description, 24).slice(0, 2);
+  // Keep the description large and strictly inside the 10 x 5 cm label.
+  descLines.forEach((lineText, i) => bold(lineText, contentX, top0 + 14.5 * MM + i * 5.2 * MM, i === 0 ? 11.5 : 10.6, NAVY));
+
+  const model = plain(item?.model || '');
+  if (model) {
+    text(`MODEL: ${model}`, contentX, top0 + 28.5 * MM, 6.2, MUTED, 'F2');
+  }
+
+  line(contentX, top0 + 31.5 * MM, x0 + LABEL_W - 5 * MM, top0 + 31.5 * MM, [221, 228, 238], .45);
+  text('DIMENSIONS (L x B x H)', contentX, top0 + 35.2 * MM, 5.4, MUTED, 'F2');
+  bold(dimensionsFor(item), contentX, top0 + 39.0 * MM, 6.8, NAVY);
+  text(`EAN: ${plain(item?.ean || '-')}`, contentX, top0 + 44.3 * MM, 5.6, MUTED, 'F1');
+
+  // Large, high-contrast MRP block; stays within the right-hand column.
+  text('MRP', mrpX, top0 + 35.2 * MM, 6.0, BLUE, 'F2');
+  bold(money(item?.mrp), mrpX, top0 + 44.5 * MM, 13.8, NAVY);
 
   return ops.join('\n');
 }
@@ -212,8 +205,7 @@ function buildPdf(objects, pages, logoBytes) {
 export async function createQrLabelPdf(items, { origin = window.location.origin } = {}) {
   if (!Array.isArray(items) || !items.length) throw new Error('Select at least one showroom item.');
 
-  const logoAsset = await loadLogoJpeg();
-  const logoBytes = logoAsset?.bytes || null;
+  const logoBytes = null;
   const pages = [];
   for (let start = 0; start < items.length; start += 10) {
     const pageItems = items.slice(start, start + 10);

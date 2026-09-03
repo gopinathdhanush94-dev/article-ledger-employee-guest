@@ -309,19 +309,20 @@ function OrderHistoryPopup({ onClose, session }) {
   </PopupShell>;
 }
 
-function SelectionPopup({ mode, products, onClose, onOpen, isFavourite, inCart, onToggleFavourite, onToggleCart, cartQuantities, setCartQuantities, customerProfile, session }) {
+function SelectionPopup({ mode, products, onClose, onOpen, isFavourite, inCart, onToggleFavourite, onToggleCart, cartQuantities, setCartQuantities, customerProfile, session, storagePrefix }) {
   const isCart = mode === 'cart';
-  const [comments, setComments] = useState(() => { try { return localStorage.getItem('g-records-showroom-order-comments') || ''; } catch { return ''; } });
-  const [requiredDates, setRequiredDates] = useState(() => { try { return JSON.parse(localStorage.getItem('g-records-showroom-required-dates') || '{}'); } catch { return {}; } });
-  const [preview, setPreview] = useState(() => { try { return localStorage.getItem('g-records-showroom-order-preview') === '1'; } catch { return false; } });
+  const storageKey = name => `${storagePrefix}-${name}`;
+  const [comments, setComments] = useState(() => { try { return localStorage.getItem(storageKey('order-comments')) || ''; } catch { return ''; } });
+  const [requiredDates, setRequiredDates] = useState(() => { try { return JSON.parse(localStorage.getItem(storageKey('required-dates')) || '{}'); } catch { return {}; } });
+  const [preview, setPreview] = useState(() => { try { return localStorage.getItem(storageKey('order-preview')) === '1'; } catch { return false; } });
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitted, setSubmitted] = useState(null);
   const selectedProducts = products.filter(item => isCart ? inCart(item) : isFavourite(item));
   const updateQty = (id, value) => setCartQuantities(current => ({ ...current, [String(id)]: Math.max(1, Math.floor(Number(value) || 1)) }));
-  const updateRequiredDate = (id, value) => setRequiredDates(current => { const next = { ...current, [String(id)]: value }; localStorage.setItem('g-records-showroom-required-dates', JSON.stringify(next)); return next; });
-  useEffect(() => { try { localStorage.setItem('g-records-showroom-order-comments', comments); } catch {} }, [comments]);
-  useEffect(() => { try { localStorage.setItem('g-records-showroom-order-preview', preview ? '1' : '0'); } catch {} }, [preview]);
+  const updateRequiredDate = (id, value) => setRequiredDates(current => { const next = { ...current, [String(id)]: value }; localStorage.setItem(storageKey('required-dates'), JSON.stringify(next)); return next; });
+  useEffect(() => { try { localStorage.setItem(storageKey('order-comments'), comments); } catch {} }, [comments]);
+  useEffect(() => { try { localStorage.setItem(storageKey('order-preview'), preview ? '1' : '0'); } catch {} }, [preview]);
 
   async function submitOrder() {
     if (!selectedProducts.length) return;
@@ -382,10 +383,10 @@ function SelectionPopup({ mode, products, onClose, onOpen, isFavourite, inCart, 
     setSubmitting(false);
     setCart([]);
     try {
-      localStorage.removeItem('g-records-showroom-cart');
-      localStorage.removeItem('g-records-showroom-order-comments');
-      localStorage.removeItem('g-records-showroom-order-preview');
-      localStorage.removeItem('g-records-showroom-required-dates');
+      localStorage.removeItem(storageKey('cart'));
+      localStorage.removeItem(storageKey('order-comments'));
+      localStorage.removeItem(storageKey('order-preview'));
+      localStorage.removeItem(storageKey('required-dates'));
     } catch {}
   }
 
@@ -610,7 +611,9 @@ function ProductDetail({ item, onBack, onScanAnother, isFavourite, inCart, onTog
 
 export default function GuestShowroom() {
   const { signOut, profile, session } = useAuth();
-  const guestStateKey = `article-ledger:guest-state:${session?.user?.id || 'anonymous'}`;
+  const storageIdentity = session?.user?.id || 'anonymous';
+  const storagePrefix = `g-records-showroom:${storageIdentity}`;
+  const guestStateKey = `article-ledger:guest-state:${storageIdentity}`;
   const savedGuestState = (() => {
     try { return JSON.parse(sessionStorage.getItem(guestStateKey) || '{}'); } catch { return {}; }
   })();
@@ -624,9 +627,9 @@ export default function GuestShowroom() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [orderHistoryOpen, setOrderHistoryOpen] = useState(false);
   const [collectionMode, setCollectionMode] = useState(savedGuestState.collectionMode || 'all');
-  const [favourites, setFavourites] = useState(() => { try { return JSON.parse(localStorage.getItem('g-records-showroom-favourites') || '[]'); } catch { return []; } });
-  const [cart, setCart] = useState(() => { try { return JSON.parse(localStorage.getItem('g-records-showroom-cart') || '[]'); } catch { return []; } });
-  const [cartQuantities, setCartQuantities] = useState(() => { try { return JSON.parse(localStorage.getItem('g-records-showroom-cart-quantities') || '{}'); } catch { return {}; } });
+  const [favourites, setFavourites] = useState(() => { try { return JSON.parse(localStorage.getItem(`${storagePrefix}-favourites`) || '[]'); } catch { return []; } });
+  const [cart, setCart] = useState(() => { try { return JSON.parse(localStorage.getItem(`${storagePrefix}-cart`) || '[]'); } catch { return []; } });
+  const [cartQuantities, setCartQuantities] = useState(() => { try { return JSON.parse(localStorage.getItem(`${storagePrefix}-cart-quantities`) || '{}'); } catch { return {}; } });
   const [popup, setPopup] = useState(null);
 
   const directQrCode = useMemo(() => {
@@ -673,9 +676,9 @@ export default function GuestShowroom() {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  useEffect(() => { localStorage.setItem('g-records-showroom-favourites', JSON.stringify(favourites)); }, [favourites]);
-  useEffect(() => { localStorage.setItem('g-records-showroom-cart', JSON.stringify(cart)); }, [cart]);
-  useEffect(() => { localStorage.setItem('g-records-showroom-cart-quantities', JSON.stringify(cartQuantities)); }, [cartQuantities]);
+  useEffect(() => { localStorage.setItem(`${storagePrefix}-favourites`, JSON.stringify(favourites)); }, [favourites]);
+  useEffect(() => { localStorage.setItem(`${storagePrefix}-cart`, JSON.stringify(cart)); }, [cart]);
+  useEffect(() => { localStorage.setItem(`${storagePrefix}-cart-quantities`, JSON.stringify(cartQuantities)); }, [cartQuantities]);
 
   // Preserve the guest's showroom position across a browser reload/tab
   // suspension. The Supabase session remains the source of truth for access;
@@ -912,7 +915,7 @@ export default function GuestShowroom() {
         <ProductDetail item={selected} onBack={closeDetail} onScanAnother={openScanner} isFavourite={isFavourite(selected)} inCart={inCart(selected)} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} />
         {scannerOpen && <ScannerModal products={items} onScan={handleScan} lookupCode={lookupGuestCode} onClose={closeScanner} />}
         {orderHistoryOpen && <OrderHistoryPopup onClose={closeOrderHistory} session={session} />}
-      {popup && <SelectionPopup mode={popup} products={items} onClose={closePopup} onOpen={openItemFromPopup} isFavourite={isFavourite} inCart={inCart} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} cartQuantities={cartQuantities} setCartQuantities={setCartQuantities} customerProfile={profile} session={session} />}
+      {popup && <SelectionPopup mode={popup} products={items} onClose={closePopup} onOpen={openItemFromPopup} isFavourite={isFavourite} inCart={inCart} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} cartQuantities={cartQuantities} setCartQuantities={setCartQuantities} customerProfile={profile} session={session} storagePrefix={storagePrefix} />}
       </div>
     );
   }
@@ -955,7 +958,7 @@ export default function GuestShowroom() {
       <footer className="showroom-footer"><div>G-Records · Product Showroom</div><div>Guest access · Public product information only</div></footer>
       {scannerOpen && <ScannerModal products={items} onScan={handleScan} lookupCode={lookupGuestCode} onClose={closeScanner} />}
       {orderHistoryOpen && <OrderHistoryPopup onClose={closeOrderHistory} session={session} />}
-      {popup && <SelectionPopup mode={popup} products={items} onClose={closePopup} onOpen={openItemFromPopup} isFavourite={isFavourite} inCart={inCart} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} cartQuantities={cartQuantities} setCartQuantities={setCartQuantities} customerProfile={profile} session={session} />}
+      {popup && <SelectionPopup mode={popup} products={items} onClose={closePopup} onOpen={openItemFromPopup} isFavourite={isFavourite} inCart={inCart} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} cartQuantities={cartQuantities} setCartQuantities={setCartQuantities} customerProfile={profile} session={session} storagePrefix={storagePrefix} />}
     </div>
   );
 }

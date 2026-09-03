@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient.js';
-import { useAuth } from './lib/useAuth.js';
+import { AuthProvider, useAuth } from './lib/useAuth.js';
 import { DialogProvider, useDialogs } from './components/Dialogs.jsx';
 import { ToastProvider, useToast } from './components/Toast.jsx';
 import LoginModal from './components/LoginModal.jsx';
@@ -564,12 +564,14 @@ function AppInner() {
 
 export default function App() {
   return (
-    <DialogProvider>
-      <ToastProvider>
-        <AccessGate>
-          <AppInner />
-        </AccessGate>
-      </ToastProvider>
-    </DialogProvider>
+    <AuthProvider>
+      <DialogProvider>
+        <ToastProvider>
+          <AccessGate>
+            <AppInner />
+          </AccessGate>
+        </ToastProvider>
+      </DialogProvider>
+    </AuthProvider>
   );
 }

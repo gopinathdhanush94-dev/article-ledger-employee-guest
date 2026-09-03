@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../supabaseClient.js';
 
 const ROLE_PERMISSIONS = {
@@ -47,84 +47,140 @@ const ROLE_PERMISSIONS = {
 };
 
 const DEFAULT_PERMISSIONS = ROLE_PERMISSIONS.viewer;
+const AuthContext = createContext(null);
 
-export function useAuth() {
+export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const sessionUserIdRef = useRef(null);
+  const profileRequestRef = useRef(0);
+  const hydratedUserIdRef = useRef(null);
+  const mountedRef = useRef(false);
 
-  const loadProfile = useCallback(async (userId, attempts = 3) => {
+  const loadProfile = useCallback(async (userId, { blockUi = false } = {}) => {
     if (!userId) {
+      hydratedUserIdRef.current = null;
       setProfile(null);
       return null;
     }
-    for (let attempt = 0; attempt < attempts; attempt += 1) {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('user_id, full_name, email, employee_id, account_type, role, status, created_at, updated_at')
-        .eq('user_id', userId)
-        .maybeSingle();
-      if (data) {
-        setProfile(data);
-        return data;
+
+    const requestId = ++profileRequestRef.current;
+    if (blockUi) setLoading(true);
+
+    let result = null;
+    try {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .select('user_id, full_name, email, employee_id, account_type, role, status, created_at, updated_at')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (data) {
+          result = data;
+          break;
+        }
+        if (error) console.error('Could not load account profile:', error);
+        if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
       }
-      if (error) console.error('Could not load account profile:', error);
-      if (attempt < attempts - 1) await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+    } finally {
+      if (mountedRef.current && requestId === profileRequestRef.current) {
+        setProfile(result);
+        hydratedUserIdRef.current = userId;
+        if (blockUi) setLoading(false);
+      }
     }
-    setProfile(null);
-    return null;
+    return result;
   }, []);
 
+  const applySession = useCallback(async (nextSession, { forceProfileReload = false, blockUi = false } = {}) => {
+    if (!mountedRef.current) return;
+
+    const nextUserId = nextSession?.user?.id || null;
+    const previousUserId = sessionUserIdRef.current;
+    const sameUser = !!nextUserId && nextUserId === previousUserId;
+
+    setSession(nextSession || null);
+    sessionUserIdRef.current = nextUserId;
+
+    if (!nextUserId) {
+      ++profileRequestRef.current;
+      hydratedUserIdRef.current = null;
+      setProfile(null);
+      setLoading(false);
+      return;
+    }
+
+    // A token refresh or duplicate SIGNED_IN for the already-mounted user must
+    // never block/unmount the application. The existing profile remains valid.
+    if (sameUser && !forceProfileReload) {
+      return;
+    }
+
+    await loadProfile(nextUserId, { blockUi });
+  }, [loadProfile]);
+
   useEffect(() => {
-    let mounted = true;
-    let initialised = false;
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!mounted) return;
-      const sess = data.session || null;
-      setSession(sess);
-      if (sess?.user?.id) await loadProfile(sess.user.id);
-      else setProfile(null);
-      if (mounted) {
-        initialised = true;
-        setLoading(false);
-      }
-    });
+    mountedRef.current = true;
+    let cancelled = false;
 
-    const { data: listener } = supabase.auth.onAuthStateChange((event, sess) => {
-      if (!mounted) return;
-      setSession(sess || null);
-      if (!sess) {
-        setProfile(null);
-        if (initialised) setLoading(false);
+    // Subscribe once for the whole application. AccessGate and AppInner both
+    // consume the same context instead of creating independent auth listeners.
+    const { data: authSubscription } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (cancelled || !mountedRef.current) return;
+
+      const nextUserId = nextSession?.user?.id || null;
+      const sameUser = !!nextUserId && nextUserId === sessionUserIdRef.current;
+
+      if (event === 'TOKEN_REFRESHED' || (event === 'SIGNED_IN' && sameUser)) {
+        // Keep the current React tree mounted. Supabase has refreshed or
+        // re-announced the same authenticated session; there is no access-gate
+        // transition to perform.
+        setSession(nextSession || null);
+        sessionUserIdRef.current = nextUserId;
         return;
       }
 
-      // TOKEN_REFRESHED happens routinely when the user returns to an
-      // existing browser tab/app. Do NOT put the access gate back into its
-      // loading/unmount state for a token refresh: doing so destroys the
-      // current screen and makes the app fall back to Home.
-      if (event === 'TOKEN_REFRESHED') {
-        // Keep the existing profile/UI mounted. Supabase has already
-        // refreshed the session; there is no reason to re-run the access gate.
-        return;
-      }
-
-      // SIGNED_IN can represent a newly authenticated user, so load the
-      // profile before releasing the access gate.
-      if (event === 'SIGNED_IN') {
-        setLoading(true);
-        Promise.resolve().then(async () => {
-          await loadProfile(sess.user.id);
-          if (mounted) setLoading(false);
-        });
-      }
+      // INITIAL_SESSION and a genuine SIGNED_IN/user change may need profile
+      // hydration. Only these transitions are allowed to block the gate.
+      void applySession(nextSession, {
+        forceProfileReload: event === 'SIGNED_IN',
+        blockUi: true,
+      });
     });
+
+    // getSession is the authoritative initial snapshot. It may race with the
+    // INITIAL_SESSION event above, so applySession treats the same user as an
+    // already-known session and avoids duplicate UI transitions.
+    supabase.auth.getSession()
+      .then(({ data }) => {
+        if (cancelled || !mountedRef.current) return;
+        const nextSession = data?.session || null;
+        const nextUserId = nextSession?.user?.id || null;
+        const alreadyHydrated = nextUserId && nextUserId === hydratedUserIdRef.current;
+        if (alreadyHydrated) {
+          setSession(nextSession);
+          setLoading(false);
+          return;
+        }
+        return applySession(nextSession, { blockUi: !!nextUserId });
+      })
+      .catch(error => {
+        console.error('Could not restore Supabase session:', error);
+        if (!cancelled && mountedRef.current) {
+          setSession(null);
+          setProfile(null);
+          setLoading(false);
+        }
+      });
 
     return () => {
-      mounted = false;
-      listener.subscription.unsubscribe();
+      cancelled = true;
+      mountedRef.current = false;
+      authSubscription.subscription.unsubscribe();
     };
-  }, [loadProfile]);
+  }, [applySession]);
 
   async function signIn(email, password) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -151,7 +207,7 @@ export function useAuth() {
   const isPending = profile?.status === 'pending';
   const isDisabled = profile?.status === 'disabled';
 
-  return {
+  const value = useMemo(() => ({
     session,
     profile,
     role,
@@ -160,14 +216,22 @@ export function useAuth() {
     signIn,
     signUp,
     signOut,
-    refreshProfile: () => loadProfile(session?.user?.id),
+    refreshProfile: () => loadProfile(session?.user?.id, { blockUi: false }),
     isAuthed: !!session,
     isEmployee,
     isGuest,
     isActive,
     isPending,
     isDisabled,
-  };
+  }), [session, profile, role, permissions, loading, loadProfile, isEmployee, isGuest, isActive, isPending, isDisabled]);
+
+  return createElement(AuthContext.Provider, { value }, children);
+}
+
+export function useAuth() {
+  const value = useContext(AuthContext);
+  if (!value) throw new Error('useAuth must be used inside <AuthProvider>.');
+  return value;
 }
 
 export { ROLE_PERMISSIONS };

@@ -23,6 +23,7 @@ create table if not exists public.showroom_items (
   sku_gw numeric,
   sku_wt_unit text,
   featured boolean not null default false,
+  featured_rank integer,
   visible boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -30,6 +31,7 @@ create table if not exists public.showroom_items (
 
 create index if not exists idx_showroom_visible on public.showroom_items(visible);
 create index if not exists idx_showroom_featured on public.showroom_items(featured);
+create index if not exists idx_showroom_featured_rank on public.showroom_items(featured, featured_rank);
 create index if not exists idx_showroom_ean on public.showroom_items(ean);
 create index if not exists idx_showroom_article on public.showroom_items(article_no);
 create index if not exists idx_showroom_category on public.showroom_items(category);

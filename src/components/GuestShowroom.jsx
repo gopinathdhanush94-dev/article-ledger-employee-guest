@@ -760,9 +760,10 @@ export default function GuestShowroom() {
       while (true) {
         const { data, error: err } = await supabase
           .from('showroom_items')
-          .select('id,source_type,ean,article_no,name,brand,model,category,description,image_url,features,dimensions,sku_l,sku_w,sku_h,sku_dim_unit,sku_nw,sku_gw,sku_wt_unit,featured,visible,created_at')
+          .select('id,source_type,ean,article_no,name,brand,model,category,description,image_url,features,dimensions,sku_l,sku_w,sku_h,sku_dim_unit,sku_nw,sku_gw,sku_wt_unit,featured,featured_rank,visible,created_at')
           .eq('visible', true)
           .order('featured', { ascending: false })
+          .order('featured_rank', { ascending: true, nullsFirst: false })
           .order('created_at', { ascending: false })
           .range(from, from + pageSize - 1);
         if (err) throw err;
@@ -829,7 +830,13 @@ export default function GuestShowroom() {
     });
   }, [items, search, category]);
 
-  const featured = useMemo(() => items.filter(x => x.featured).slice(0, 4), [items]);
+  const featured = useMemo(() => items
+    .filter(x => x.featured)
+    .sort((a, b) => {
+      const ar = Number.isFinite(Number(a.featured_rank)) ? Number(a.featured_rank) : 999999;
+      const br = Number.isFinite(Number(b.featured_rank)) ? Number(b.featured_rank) : 999999;
+      return ar - br || String(a.created_at || '').localeCompare(String(b.created_at || ''));
+    }), [items]);
 
   function openItem(item, { pushHistory = true } = {}) {
     if (!item) return;
@@ -924,6 +931,37 @@ export default function GuestShowroom() {
     <div className="showroom-app">
       <ShowroomHeader search={search} setSearch={value => { setSearch(value); setCollectionMode('all'); }} onScan={openScanner} onSignOut={signOut} favouriteCount={favouriteCount} cartCount={cartCount} onFavourites={() => openPopup('favourites')} onCart={() => openPopup('cart')} onOrders={openOrderHistory} orderCount={recentOrderCount} />
       <main className="showroom-main">
+        {featured.length > 0 && (
+          <section className="showroom-premium-section" aria-label="Premium Selection">
+            <div className="showroom-premium-heading">
+              <div>
+                <span>CURATED FOR YOU</span>
+                <h2>Premium Selection</h2>
+              </div>
+              <div className="showroom-premium-note">Handpicked by our showroom team</div>
+            </div>
+            <div className="showroom-premium-viewport">
+              <div className={`showroom-premium-track ${featured.length < 3 ? 'is-short' : ''}`}>
+                {[...featured, ...featured].map((item, index) => (
+                  <article className="showroom-premium-card" key={`${item.id}-${index}`}>
+                    <button type="button" className="showroom-premium-card-main" onClick={() => openItem(item)} aria-label={`View premium selection: ${displayName(item)}`}>
+                      <div className="showroom-premium-image">
+                        {getImage(item) ? <img src={getImage(item)} alt="" loading="lazy" /> : <div className="showroom-premium-placeholder">{String(item.category || 'G').slice(0, 1).toUpperCase()}</div>}
+                        <span className="showroom-premium-badge">Premium</span>
+                      </div>
+                      <div className="showroom-premium-copy">
+                        <span>{[item.brand, item.category].filter(Boolean).join(' · ') || 'G-Records Collection'}</span>
+                        <h3>{displayName(item)}</h3>
+                        <small>{productCode(item) || 'View product details'} <ArrowIcon /></small>
+                      </div>
+                    </button>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
         <section className="showroom-hero">
           <div>
             <span className="showroom-hero-eyebrow">WELCOME TO THE SHOWROOM</span>

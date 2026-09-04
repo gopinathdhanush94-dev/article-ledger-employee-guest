@@ -32,6 +32,9 @@ function QrIcon() {
 function ArrowIcon() {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" /></svg>;
 }
+function ChevronRightIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>;
+}
 
 function HeartIcon({ filled = false }) {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 8.7c0 5.1-8.8 10.1-8.8 10.1S3.2 13.8 3.2 8.7A4.7 4.7 0 0 1 12 6.2a4.7 4.7 0 0 1 8.8 2.5Z" fill={filled ? "currentColor" : "none"} /></svg>;
@@ -972,7 +975,7 @@ export default function GuestShowroom() {
                   });
                 }}
               >
-                {featuredExpanded ? <>View less <span className="showroom-featured-chevron">↑</span></> : <>View all <ArrowIcon /></>}
+                {featuredExpanded ? <>View less <span className="showroom-featured-chevron" aria-hidden="true">⌃</span></> : <>View all <span className="showroom-featured-chevron showroom-featured-chevron-right" aria-hidden="true"><ChevronRightIcon /></span></>}
               </button>
             </div>
             {featuredExpanded ? (

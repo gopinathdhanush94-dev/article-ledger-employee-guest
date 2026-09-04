@@ -975,7 +975,7 @@ export default function GuestShowroom() {
                   });
                 }}
               >
-                {featuredExpanded ? <>View less <span className="showroom-featured-chevron" aria-hidden="true">⌃</span></> : <>View all <span className="showroom-featured-chevron showroom-featured-chevron-right" aria-hidden="true"><ChevronRightIcon /></span></>}
+                {featuredExpanded ? <>View less <span className="showroom-featured-chevron showroom-featured-chevron-up" aria-hidden="true"><ChevronRightIcon /></span></> : <>View all <span className="showroom-featured-chevron showroom-featured-chevron-right" aria-hidden="true"><ChevronRightIcon /></span></>}
               </button>
             </div>
             {featuredExpanded ? (

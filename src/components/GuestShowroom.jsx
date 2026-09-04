@@ -936,6 +936,27 @@ export default function GuestShowroom() {
     <div className="showroom-app">
       <ShowroomHeader search={search} setSearch={value => { setSearch(value); setCollectionMode('all'); }} onScan={openScanner} onSignOut={signOut} favouriteCount={favouriteCount} cartCount={cartCount} onFavourites={() => openPopup('favourites')} onCart={() => openPopup('cart')} onOrders={openOrderHistory} orderCount={recentOrderCount} />
       <main className="showroom-main">
+        <section className="showroom-hero">
+          <div>
+            <span className="showroom-hero-eyebrow">WELCOME TO THE SHOWROOM</span>
+            <h1>Explore our products.</h1>
+            <p>Browse the collection, discover product highlights, or scan the QR code on a display to open the product instantly.</p>
+            <div className="showroom-hero-actions">
+              <button type="button" className="showroom-primary-btn" onClick={openScanner}><QrIcon /> Scan product QR</button>
+              <button type="button" className="showroom-outline-btn" onClick={() => document.getElementById('showroom-collection')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>Browse collection</button>
+            </div>
+          </div>
+          <div className="showroom-hero-orbit" aria-hidden="true"><div className="showroom-orbit-ring ring-1"/><div className="showroom-orbit-ring ring-2"/><div className="showroom-orbit-core">G</div></div>
+        </section>
+
+        {featured.length > 0 && (
+          <section className="showroom-section-block">
+            <div className="showroom-block-heading"><div><span>HANDPICKED</span><h2>Featured products</h2></div><button type="button" onClick={() => setSearch('')}>View all <ArrowIcon /></button></div>
+            <div className="showroom-featured-grid">{featured.map(item => <ProductCard key={item.id} item={item} onOpen={openItem} isFavourite={isFavourite(item)} inCart={inCart(item)} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} />)}</div>
+          </section>
+        )}
+
+
         {featured.length > 0 && (
           <section className="showroom-premium-section" aria-label="Premium Selection">
             <div className="showroom-premium-heading">
@@ -967,25 +988,6 @@ export default function GuestShowroom() {
           </section>
         )}
 
-        <section className="showroom-hero">
-          <div>
-            <span className="showroom-hero-eyebrow">WELCOME TO THE SHOWROOM</span>
-            <h1>Explore our products.</h1>
-            <p>Browse the collection, discover product highlights, or scan the QR code on a display to open the product instantly.</p>
-            <div className="showroom-hero-actions">
-              <button type="button" className="showroom-primary-btn" onClick={openScanner}><QrIcon /> Scan product QR</button>
-              <button type="button" className="showroom-outline-btn" onClick={() => window.scrollTo({ top: 520, behavior: 'smooth' })}>Browse collection</button>
-            </div>
-          </div>
-          <div className="showroom-hero-orbit" aria-hidden="true"><div className="showroom-orbit-ring ring-1"/><div className="showroom-orbit-ring ring-2"/><div className="showroom-orbit-core">G</div></div>
-        </section>
-
-        {featured.length > 0 && (
-          <section className="showroom-section-block">
-            <div className="showroom-block-heading"><div><span>HANDPICKED</span><h2>Featured products</h2></div><button type="button" onClick={() => setSearch('')}>View all <ArrowIcon /></button></div>
-            <div className="showroom-featured-grid">{featured.map(item => <ProductCard key={item.id} item={item} onOpen={openItem} isFavourite={isFavourite(item)} inCart={inCart(item)} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} />)}</div>
-          </section>
-        )}
 
         <section className="showroom-section-block" id="showroom-collection">
           <div className="showroom-block-heading"><div><span>{collectionMode === 'favourites' ? 'YOUR SELECTION' : collectionMode === 'cart' ? 'YOUR CART' : 'COLLECTION'}</span><h2>{collectionMode === 'favourites' ? 'Favourite products' : collectionMode === 'cart' ? 'Cart' : 'Browse products'}</h2></div><div className="showroom-result-count">{loading ? 'Loading…' : `${filtered.length} products`}</div></div>

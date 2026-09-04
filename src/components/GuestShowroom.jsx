@@ -631,6 +631,7 @@ export default function GuestShowroom() {
   const [cart, setCart] = useState(() => { try { return JSON.parse(localStorage.getItem(`${storagePrefix}-cart`) || '[]'); } catch { return []; } });
   const [cartQuantities, setCartQuantities] = useState(() => { try { return JSON.parse(localStorage.getItem(`${storagePrefix}-cart-quantities`) || '{}'); } catch { return {}; } });
   const [popup, setPopup] = useState(null);
+  const restoredSelectionRef = useRef(false);
 
   const directQrCode = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -638,7 +639,11 @@ export default function GuestShowroom() {
   }, []);
 
   useEffect(() => {
-    if (directQrCode || !items.length || selected || !savedGuestState.selectedId) return;
+    // Restore a previously open product only once. Without this guard, closing
+    // a restored detail page sets selected=null, which causes this effect to
+    // immediately restore the same product from the stale initial snapshot.
+    if (restoredSelectionRef.current || directQrCode || !items.length || selected || !savedGuestState.selectedId) return;
+    restoredSelectionRef.current = true;
     const restored = items.find(item => String(item.id) === String(savedGuestState.selectedId));
     if (restored) setSelected(restored);
   }, [directQrCode, items, selected, savedGuestState.selectedId]);

@@ -69,7 +69,7 @@ export default function ShowroomManager({ canEdit = false }) {
     try {
       while (true) {
         const { data, error: err } = await supabase.from('showroom_items')
-          .select('id,source_type,source_id,ean,article_no,name,brand,model,category,description,image_url,features,dimensions,featured,featured_rank,premium_selected,premium_rank,visible,created_at,updated_at')
+          .select('id,source_type,source_id,ean,article_no,name,brand,model,category,description,image_url,features,dimensions,featured,featured_rank,visible,created_at,updated_at')
           .order('featured', { ascending: false }).order('featured_rank', { ascending: true, nullsFirst: false }).order('visible', { ascending: false }).order('created_at', { ascending: false })
           .range(from, from + pageSize - 1);
         if (err) throw err;
@@ -90,7 +90,6 @@ export default function ShowroomManager({ canEdit = false }) {
     visible: items.filter(x => x.visible).length,
     hidden: items.filter(x => !x.visible).length,
     featured: items.filter(x => x.featured && x.visible).length,
-    premium: items.filter(x => x.premium_selected && x.visible).length,
   }), [items]);
 
   const categories = useMemo(() => [...new Set(items.map(x => x.category).filter(Boolean))].sort((a,b) => String(a).localeCompare(String(b))), [items]);
@@ -119,35 +118,27 @@ export default function ShowroomManager({ canEdit = false }) {
       return ar - br || String(a.created_at || '').localeCompare(String(b.created_at || ''));
     }), [items]);
 
-  const premiumItems = useMemo(() => items
-    .filter(item => item.premium_selected && item.visible)
-    .sort((a, b) => {
-      const ar = Number.isFinite(Number(a.premium_rank)) ? Number(a.premium_rank) : 999999;
-      const br = Number.isFinite(Number(b.premium_rank)) ? Number(b.premium_rank) : 999999;
-      return ar - br || String(a.created_at || '').localeCompare(String(b.created_at || ''));
-    }), [items]);
-
-  async function movePremium(itemId, direction) {
+  async function moveFeatured(itemId, direction) {
     if (!canEdit) return;
-    const index = premiumItems.findIndex(item => String(item.id) === String(itemId));
+    const index = featuredItems.findIndex(item => String(item.id) === String(itemId));
     const swapIndex = index + direction;
-    if (index < 0 || swapIndex < 0 || swapIndex >= premiumItems.length) return;
-    const current = premiumItems[index];
-    const swap = premiumItems[swapIndex];
+    if (index < 0 || swapIndex < 0 || swapIndex >= featuredItems.length) return;
+    const current = featuredItems[index];
+    const swap = featuredItems[swapIndex];
     setBulkBusy(true);
     setError('');
     try {
-      const firstRank = Number.isFinite(Number(current.premium_rank)) ? Number(current.premium_rank) : index + 1;
-      const secondRank = Number.isFinite(Number(swap.premium_rank)) ? Number(swap.premium_rank) : swapIndex + 1;
-      const { error: firstError } = await supabase.from('showroom_items').update({ premium_rank: secondRank }).eq('id', current.id);
+      const firstRank = Number.isFinite(Number(current.featured_rank)) ? Number(current.featured_rank) : index + 1;
+      const secondRank = Number.isFinite(Number(swap.featured_rank)) ? Number(swap.featured_rank) : swapIndex + 1;
+      const { error: firstError } = await supabase.from('showroom_items').update({ featured_rank: secondRank }).eq('id', current.id);
       if (firstError) throw firstError;
-      const { error: secondError } = await supabase.from('showroom_items').update({ premium_rank: firstRank }).eq('id', swap.id);
+      const { error: secondError } = await supabase.from('showroom_items').update({ featured_rank: firstRank }).eq('id', swap.id);
       if (secondError) throw secondError;
       setItems(prev => prev.map(row => row.id === current.id
-        ? { ...row, premium_rank: secondRank }
-        : row.id === swap.id ? { ...row, premium_rank: firstRank } : row));
+        ? { ...row, featured_rank: secondRank }
+        : row.id === swap.id ? { ...row, featured_rank: firstRank } : row));
     } catch (err) {
-      setError(err?.message || 'Could not change Premium Selection order');
+      setError(err?.message || 'Could not change Featured products order');
     } finally {
       setBulkBusy(false);
     }
@@ -245,18 +236,12 @@ export default function ShowroomManager({ canEdit = false }) {
       await load();
     }
     if (action === 'unfeatured') await batchUpdate(ids, { featured: false, featured_rank: null });
-    if (action === 'premium') {
-      const nextRank = Math.max(0, ...premiumItems.map(row => Number(row.premium_rank) || 0));
-      for (let i = 0; i < ids.length; i += 1) await updateItem(ids[i], { visible: true, premium_selected: true, premium_rank: nextRank + i + 1 });
-      await load();
-    }
-    if (action === 'unpremium') await batchUpdate(ids, { premium_selected: false, premium_rank: null });
   }
 
   return (
     <main className="showroom-manager">
       <section className="showroom-manager-hero">
-        <div><span className="showroom-manager-eyebrow">SHOWROOM CONTROL</span><h1>Manage showroom</h1><p>Choose which catalogue items are visible to guests, which deserve the Featured position, and which deserve the Premium Selection spotlight.</p></div>
+        <div><span className="showroom-manager-eyebrow">SHOWROOM CONTROL</span><h1>Manage showroom</h1><p>Choose which catalogue items are visible to guests, which deserve the Featured position, and which deserve the Featured position on the Guest Showroom.</p></div>
         <button type="button" className="showroom-manager-refresh" onClick={load} disabled={loading}>↻ Refresh</button>
       </section>
 
@@ -264,32 +249,32 @@ export default function ShowroomManager({ canEdit = false }) {
         <div><strong>{stats.total}</strong><span>Total showroom items</span></div><div><strong>{stats.visible}</strong><span>Visible to guests</span></div><div><strong>{stats.hidden}</strong><span>Hidden</span></div><div><strong>{stats.featured}</strong><span>Featured</span></div>
       </section>
 
-      <section className="showroom-premium-manager">
-        <div className="showroom-premium-manager-head">
+      <section className="showroom-featured-manager">
+        <div className="showroom-featured-manager-head">
           <div>
-            <span>PREMIUM SELECTION</span>
-            <h3>{premiumItems.length ? `${premiumItems.length} curated product${premiumItems.length === 1 ? '' : 's'}` : 'No premium products yet'}</h3>
-            <p>Use <strong>Premium</strong> in the catalogue below to add products. Premium products appear in the horizontal Guest Showroom carousel and are automatically hidden from the Handpicked Featured grid to avoid duplicates.</p>
+            <span>FEATURED PRODUCTS</span>
+            <h3>{featuredItems.length ? `${featuredItems.length} handpicked product${featuredItems.length === 1 ? '' : 's'}` : 'No featured products yet'}</h3>
+            <p>Use <strong>Feature</strong> in the catalogue below to add products. Featured products appear in the horizontal Guest Showroom carousel. Use the arrows to control their display priority.</p>
           </div>
         </div>
-        {premiumItems.length ? (
-          <div className="showroom-premium-manager-list">
-            {premiumItems.map((item, index) => (
-              <div className="showroom-premium-manager-item" key={item.id}>
-                <span className="showroom-premium-manager-rank">{index + 1}</span>
-                {imageFor(item) ? <img src={imageFor(item)} alt="" loading="lazy" /> : <div className="showroom-premium-manager-thumb">{String(item.category || item.source_type || 'P').slice(0,1).toUpperCase()}</div>}
-                <div className="showroom-premium-manager-copy">
+        {featuredItems.length ? (
+          <div className="showroom-featured-manager-list">
+            {featuredItems.map((item, index) => (
+              <div className="showroom-featured-manager-item" key={item.id}>
+                <span className="showroom-featured-manager-rank">{index + 1}</span>
+                {imageFor(item) ? <img src={imageFor(item)} alt="" loading="lazy" /> : <div className="showroom-featured-manager-thumb">{String(item.category || item.source_type || 'F').slice(0,1).toUpperCase()}</div>}
+                <div className="showroom-featured-manager-copy">
                   <strong>{nameFor(item)}</strong>
-                  <small>{[item.brand, item.model, item.article_no].filter(Boolean).join(' · ') || 'Premium product'}</small>
+                  <small>{[item.brand, item.model, item.article_no].filter(Boolean).join(' · ') || 'Featured product'}</small>
                 </div>
-                {canEdit && <div className="showroom-premium-manager-controls">
-                  <button type="button" onClick={() => movePremium(item.id, -1)} disabled={bulkBusy || index === 0} aria-label={`Move ${nameFor(item)} earlier`}>←</button>
-                  <button type="button" onClick={() => movePremium(item.id, 1)} disabled={bulkBusy || index === premiumItems.length - 1} aria-label={`Move ${nameFor(item)} later`}>→</button>
+                {canEdit && <div className="showroom-featured-manager-controls">
+                  <button type="button" onClick={() => moveFeatured(item.id, -1)} disabled={bulkBusy || index === 0} aria-label={`Move ${nameFor(item)} earlier`}>←</button>
+                  <button type="button" onClick={() => moveFeatured(item.id, 1)} disabled={bulkBusy || index === featuredItems.length - 1} aria-label={`Move ${nameFor(item)} later`}>→</button>
                 </div>}
               </div>
             ))}
           </div>
-        ) : <div className="showroom-manager-empty"><strong>Select products below and choose Premium.</strong><span>Premium products appear in the Guest Showroom carousel; Handpicked Featured products remain separate.</span></div>}
+        ) : <div className="showroom-manager-empty"><strong>Select products below and choose Feature.</strong><span>Featured products appear in the Guest Showroom carousel.</span></div>}
       </section>
 
       <section className="showroom-manager-panel">
@@ -309,8 +294,6 @@ export default function ShowroomManager({ canEdit = false }) {
             <button type="button" onClick={() => applySelected('hidden')} disabled={bulkBusy || !selectedCount}>Hide</button>
             <button type="button" onClick={() => applySelected('featured')} disabled={bulkBusy || !selectedCount}>Feature</button>
             <button type="button" onClick={() => applySelected('unfeatured')} disabled={bulkBusy || !selectedCount}>Unfeature</button>
-            <button type="button" onClick={() => applySelected('premium')} disabled={bulkBusy || !selectedCount}>Premium</button>
-            <button type="button" onClick={() => applySelected('unpremium')} disabled={bulkBusy || !selectedCount}>Unpremium</button>
             <button type="button" className="showroom-qr-action" onClick={prepareQrLabels} disabled={bulkBusy || !selectedCount}>▦ Generate QR Labels</button>
           </div>}
         </div>
@@ -320,7 +303,7 @@ export default function ShowroomManager({ canEdit = false }) {
         {loading ? <div className="showroom-manager-empty">Loading showroom items…</div> : !filtered.length ? <div className="showroom-manager-empty"><strong>No matching showroom items</strong><span>Try a different search or filter.</span></div> : (
           <div className="showroom-manager-table-wrap"><table className="showroom-manager-table"><thead><tr>
             <th className="showroom-select-col"><input type="checkbox" checked={allFilteredSelected} onChange={toggleSelectAllFiltered} aria-label="Select all matching showroom items" /></th>
-            <th>Product</th><th>Type</th><th>Article / EAN</th><th>Category</th><th>Guest visibility</th><th>Featured</th><th>Premium</th>
+            <th>Product</th><th>Type</th><th>Article / EAN</th><th>Category</th><th>Guest visibility</th><th>Featured</th>
           </tr></thead><tbody>{filtered.map(item => <tr key={item.id} className={selectedIds.has(item.id) ? 'selected' : ''}>
             <td className="showroom-select-col"><input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelected(item.id)} aria-label={`Select ${nameFor(item)}`} /></td>
             <td><div className="showroom-manager-product">{imageFor(item) ? <img src={imageFor(item)} alt="" loading="lazy" /> : <div className="showroom-manager-thumb">{String(item.category || item.source_type || 'P').slice(0,1).toUpperCase()}</div>}<div><strong>{nameFor(item)}</strong><span>{[item.brand,item.model].filter(Boolean).join(' · ') || '—'}</span></div></div></td>
@@ -329,9 +312,7 @@ export default function ShowroomManager({ canEdit = false }) {
             <td><button type="button" className={`showroom-star ${item.featured?'on':''}`} disabled={!canEdit || !item.visible || busyId===item.id} onClick={() => updateItem(item.id, item.featured
               ? { featured: false, featured_rank: null }
               : { featured: true, featured_rank: Math.max(0, ...featuredItems.map(row => Number(row.featured_rank) || 0)) + 1 })}>★ {item.featured?'Featured':'Feature'}</button></td>
-            <td><button type="button" className={`showroom-premium-toggle ${item.premium_selected?'on':''}`} disabled={!canEdit || !item.visible || busyId===item.id} onClick={() => updateItem(item.id, item.premium_selected
-              ? { premium_selected: false, premium_rank: null }
-              : { premium_selected: true, premium_rank: Math.max(0, ...premiumItems.map(row => Number(row.premium_rank) || 0)) + 1 })}>◆ {item.premium_selected?'Premium':'Premium +'}</button></td>
+
           </tr>)}</tbody></table></div>
         )}
       </section>

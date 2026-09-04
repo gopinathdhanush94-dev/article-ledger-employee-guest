@@ -2592,3 +2592,27 @@
   .showroom-featured-slide { width:min(320px,27vw); flex-basis:min(320px,27vw); }
   .showroom-featured-track { gap:16px; padding:0 22px; }
 }
+
+/* Featured homepage: compact carousel with an optional in-place expanded view. */
+.showroom-featured-view-all { min-width:92px; justify-content:flex-end; }
+.showroom-featured-chevron { font-size:18px; line-height:1; }
+.showroom-featured-viewport { padding: 2px 8px 8px; mask-image:none; -webkit-mask-image:none; }
+.showroom-featured-track { padding: 0 10px; }
+.showroom-featured-section.is-expanded { overflow:visible; }
+.showroom-featured-expanded-grid {
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:16px;
+  padding:2px 10px 4px;
+}
+.showroom-featured-expanded-item { min-width:0; }
+.showroom-featured-expanded-item .showroom-product-card { height:100%; }
+@media (max-width:1100px) {
+  .showroom-featured-expanded-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+}
+@media (max-width:720px) {
+  .showroom-featured-expanded-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; padding:2px 8px 4px; }
+}
+@media (max-width:460px) {
+  .showroom-featured-expanded-grid { grid-template-columns:1fr; }
+}

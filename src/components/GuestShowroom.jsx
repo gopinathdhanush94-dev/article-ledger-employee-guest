@@ -627,6 +627,7 @@ export default function GuestShowroom() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [orderHistoryOpen, setOrderHistoryOpen] = useState(false);
   const [collectionMode, setCollectionMode] = useState(savedGuestState.collectionMode || 'all');
+  const [featuredExpanded, setFeaturedExpanded] = useState(false);
   const [favourites, setFavourites] = useState(() => { try { return JSON.parse(localStorage.getItem(`${storagePrefix}-favourites`) || '[]'); } catch { return []; } });
   const [cart, setCart] = useState(() => { try { return JSON.parse(localStorage.getItem(`${storagePrefix}-cart`) || '[]'); } catch { return []; } });
   const [cartQuantities, setCartQuantities] = useState(() => { try { return JSON.parse(localStorage.getItem(`${storagePrefix}-cart-quantities`) || '{}'); } catch { return {}; } });
@@ -953,23 +954,46 @@ export default function GuestShowroom() {
         </section>
 
         {featured.length > 0 && (
-          <section className="showroom-featured-section" aria-label="Featured products">
+          <section className={`showroom-featured-section ${featuredExpanded ? 'is-expanded' : ''}`} aria-label="Featured products">
             <div className="showroom-featured-heading">
               <div>
                 <span>HANDPICKED</span>
                 <h2>Featured products</h2>
               </div>
-              <button type="button" onClick={() => { setSearch(''); setCategory('All'); setCollectionMode('featured'); document.getElementById('showroom-collection')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>View all <ArrowIcon /></button>
+              <button
+                type="button"
+                className="showroom-featured-view-all"
+                aria-expanded={featuredExpanded}
+                onClick={() => {
+                  const next = !featuredExpanded;
+                  setFeaturedExpanded(next);
+                  requestAnimationFrame(() => {
+                    document.querySelector('.showroom-featured-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  });
+                }}
+              >
+                {featuredExpanded ? <>View less <span className="showroom-featured-chevron">↑</span></> : <>View all <ArrowIcon /></>}
+              </button>
             </div>
-            <div className="showroom-featured-viewport">
-              <div className={`showroom-featured-track ${featured.length <= 4 ? 'is-short' : ''}`}>
-                {[...featured, ...(featured.length > 4 ? featured : [])].map((item, index) => (
-                  <article className="showroom-featured-slide" key={`${item.id}-${index}`}>
+            {featuredExpanded ? (
+              <div className="showroom-featured-expanded-grid">
+                {featured.map(item => (
+                  <article className="showroom-featured-expanded-item" key={item.id}>
                     <ProductCard item={item} onOpen={openItem} isFavourite={isFavourite(item)} inCart={inCart(item)} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} />
                   </article>
                 ))}
               </div>
-            </div>
+            ) : (
+              <div className="showroom-featured-viewport">
+                <div className={`showroom-featured-track ${featured.length <= 4 ? 'is-short' : ''}`}>
+                  {[...featured, ...(featured.length > 4 ? featured : [])].map((item, index) => (
+                    <article className="showroom-featured-slide" key={`${item.id}-${index}`}>
+                      <ProductCard item={item} onOpen={openItem} isFavourite={isFavourite(item)} inCart={inCart(item)} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} />
+                    </article>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
         )}
 

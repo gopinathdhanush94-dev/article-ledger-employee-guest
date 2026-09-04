@@ -24,6 +24,8 @@ create table if not exists public.showroom_items (
   sku_wt_unit text,
   featured boolean not null default false,
   featured_rank integer,
+  premium_selected boolean not null default false,
+  premium_rank integer,
   visible boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

@@ -835,8 +835,19 @@ export default function GuestShowroom() {
     });
   }, [items, search, category]);
 
+  // Featured and Premium are intentionally separate selections. Premium items
+  // are excluded from the handpicked grid so the same product is never shown
+  // twice on the Guest Showroom homepage.
+  const premium = useMemo(() => items
+    .filter(x => x.premium_selected && x.visible)
+    .sort((a, b) => {
+      const ar = Number.isFinite(Number(a.premium_rank)) ? Number(a.premium_rank) : 999999;
+      const br = Number.isFinite(Number(b.premium_rank)) ? Number(b.premium_rank) : 999999;
+      return ar - br || String(a.created_at || '').localeCompare(String(b.created_at || ''));
+    }), [items]);
+
   const featured = useMemo(() => items
-    .filter(x => x.featured)
+    .filter(x => x.featured && x.visible && !x.premium_selected)
     .sort((a, b) => {
       const ar = Number.isFinite(Number(a.featured_rank)) ? Number(a.featured_rank) : 999999;
       const br = Number.isFinite(Number(b.featured_rank)) ? Number(b.featured_rank) : 999999;
@@ -949,15 +960,7 @@ export default function GuestShowroom() {
           <div className="showroom-hero-orbit" aria-hidden="true"><div className="showroom-orbit-ring ring-1"/><div className="showroom-orbit-ring ring-2"/><div className="showroom-orbit-core">G</div></div>
         </section>
 
-        {featured.length > 0 && (
-          <section className="showroom-section-block">
-            <div className="showroom-block-heading"><div><span>HANDPICKED</span><h2>Featured products</h2></div><button type="button" onClick={() => setSearch('')}>View all <ArrowIcon /></button></div>
-            <div className="showroom-featured-grid">{featured.map(item => <ProductCard key={item.id} item={item} onOpen={openItem} isFavourite={isFavourite(item)} inCart={inCart(item)} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} />)}</div>
-          </section>
-        )}
-
-
-        {featured.length > 0 && (
+        {premium.length > 0 && (
           <section className="showroom-premium-section" aria-label="Premium Selection">
             <div className="showroom-premium-heading">
               <div>
@@ -968,7 +971,7 @@ export default function GuestShowroom() {
             </div>
             <div className="showroom-premium-viewport">
               <div className={`showroom-premium-track ${featured.length < 3 ? 'is-short' : ''}`}>
-                {[...featured, ...featured].map((item, index) => (
+                {[...premium, ...premium].map((item, index) => (
                   <article className="showroom-premium-card" key={`${item.id}-${index}`}>
                     <button type="button" className="showroom-premium-card-main" onClick={() => openItem(item)} aria-label={`View premium selection: ${displayName(item)}`}>
                       <div className="showroom-premium-image">
@@ -988,6 +991,12 @@ export default function GuestShowroom() {
           </section>
         )}
 
+        {featured.length > 0 && (
+          <section className="showroom-section-block">
+            <div className="showroom-block-heading"><div><span>HANDPICKED</span><h2>Featured products</h2></div><button type="button" onClick={() => setSearch('')}>View all <ArrowIcon /></button></div>
+            <div className="showroom-featured-grid">{featured.map(item => <ProductCard key={item.id} item={item} onOpen={openItem} isFavourite={isFavourite(item)} inCart={inCart(item)} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} />)}</div>
+          </section>
+        )}
 
         <section className="showroom-section-block" id="showroom-collection">
           <div className="showroom-block-heading"><div><span>{collectionMode === 'favourites' ? 'YOUR SELECTION' : collectionMode === 'cart' ? 'YOUR CART' : 'COLLECTION'}</span><h2>{collectionMode === 'favourites' ? 'Favourite products' : collectionMode === 'cart' ? 'Cart' : 'Browse products'}</h2></div><div className="showroom-result-count">{loading ? 'Loading…' : `${filtered.length} products`}</div></div>

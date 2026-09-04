@@ -1,13 +1,11 @@
-# Premium Selection Update
+# Premium Selection — final showroom layout
 
-## What changed
-- Added a premium horizontal auto-scrolling **Premium Selection** ribbon to the top of the Guest Showroom.
-- Premium products use the existing showroom `featured` flag, so existing visibility/featured workflows remain intact.
-- Added `featured_rank` to persist the employee-defined Premium Selection order.
-- Showroom Manager now includes a Premium Selection ordering panel with left/right controls.
-- Existing QR scanning, product details, favourites, cart, quotation requests, order history, showroom visibility, roles and permissions are unchanged.
+- Guest Showroom order is: Welcome → Premium Selection → Handpicked Featured → Collection.
+- Premium Selection is now independent from Handpicked Featured products.
+- Employees can mark products as Premium separately and set Premium order with left/right controls.
+- Premium products are excluded from the Handpicked Featured grid, preventing duplicate products on the homepage.
+- Premium remains a single horizontal carousel; additional products continue on the same row rather than creating another row.
+- Existing Featured selection, QR scanning, favourites, cart, quotation workflow, showroom visibility, roles and permissions remain unchanged.
 
 ## Database migration
-Run `supabase/showroom_premium_selection_migration.sql` once against the existing Supabase database. It adds `featured_rank`, creates an index, and assigns an initial deterministic order to currently featured products.
-
-The Guest Showroom reads `featured_rank` first and falls back to the existing featured state for display logic; the migration is required for employees to persist the new order.
+Run `supabase/showroom_premium_selection_migration.sql` once in Supabase. It adds `premium_selected` and `premium_rank` without changing existing Featured records.

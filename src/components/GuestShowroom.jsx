@@ -829,6 +829,7 @@ export default function GuestShowroom() {
     return items.filter(item => {
       if (collectionMode === 'favourites' && !isFavourite(item)) return false;
       if (collectionMode === 'cart' && !inCart(item)) return false;
+      if (collectionMode === 'featured' && !item.featured) return false;
       if (category !== 'All' && String(item.category || '') !== category) return false;
       if (!q) return true;
       return [item.name, item.brand, item.model, item.category, item.ean, item.article_no].filter(Boolean).some(v => String(v).toLowerCase().includes(q));
@@ -958,7 +959,7 @@ export default function GuestShowroom() {
                 <span>HANDPICKED</span>
                 <h2>Featured products</h2>
               </div>
-              <button type="button" onClick={() => document.getElementById('showroom-collection')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>View all <ArrowIcon /></button>
+              <button type="button" onClick={() => { setSearch(''); setCategory('All'); setCollectionMode('featured'); document.getElementById('showroom-collection')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>View all <ArrowIcon /></button>
             </div>
             <div className="showroom-featured-viewport">
               <div className={`showroom-featured-track ${featured.length <= 4 ? 'is-short' : ''}`}>
@@ -973,7 +974,7 @@ export default function GuestShowroom() {
         )}
 
         <section className="showroom-section-block" id="showroom-collection">
-          <div className="showroom-block-heading"><div><span>{collectionMode === 'favourites' ? 'YOUR SELECTION' : collectionMode === 'cart' ? 'YOUR CART' : 'COLLECTION'}</span><h2>{collectionMode === 'favourites' ? 'Favourite products' : collectionMode === 'cart' ? 'Cart' : 'Browse products'}</h2></div><div className="showroom-result-count">{loading ? 'Loading…' : `${filtered.length} products`}</div></div>
+          <div className="showroom-block-heading"><div><span>{collectionMode === 'favourites' ? 'YOUR SELECTION' : collectionMode === 'cart' ? 'YOUR CART' : collectionMode === 'featured' ? 'HANDPICKED' : 'COLLECTION'}</span><h2>{collectionMode === 'favourites' ? 'Favourite products' : collectionMode === 'cart' ? 'Cart' : collectionMode === 'featured' ? 'Featured products' : 'Browse products'}</h2></div><div className="showroom-result-count">{loading ? 'Loading…' : `${filtered.length} products`}</div></div>
           <div className="showroom-category-row">
             {categories.map(cat => <button key={cat} type="button" className={category === cat ? 'active' : ''} onClick={() => setCategory(cat)}>{cat}</button>)}
           </div>

@@ -2581,3 +2581,14 @@
 .showroom-featured-manager-controls { display:flex; gap:4px; }
 .showroom-featured-manager-controls button { width:32px; height:32px; border:1px solid #e2e7eb; border-radius:9px; background:#fff; cursor:pointer; }
 .showroom-featured-manager-controls button:disabled { opacity:.35; cursor:default; }
+
+/* Featured carousel layout polish: keep the track visually centered while it scrolls. */
+.showroom-featured-section { box-sizing:border-box; }
+.showroom-featured-viewport { position:relative; overflow:hidden; padding:2px 0 6px; }
+.showroom-featured-track { align-items:stretch; }
+.showroom-featured-slide { box-sizing:border-box; }
+.showroom-featured-slide .showroom-product-card { min-height:100%; }
+@media (min-width:1001px) {
+  .showroom-featured-slide { width:min(320px,27vw); flex-basis:min(320px,27vw); }
+  .showroom-featured-track { gap:16px; padding:0 22px; }
+}

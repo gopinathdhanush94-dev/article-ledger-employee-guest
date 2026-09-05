@@ -290,6 +290,19 @@ function AppInner() {
     requireAuth(() => { setEditingProduct(product); navigate('add-product'); });
   }
 
+  function duplicateProduct(product) {
+    if (!permissions.canAdd) return showToast('Your account does not have permission to add articles', 'error');
+    requireAuth(() => {
+      // Clone the complete article so the user only needs to change the
+      // values that differ (commonly colour/model/EAN/article number).
+      // Never carry over the database id or EAN: EAN is the unique identity.
+      const copy = { ...product, id: null, ean: '', custom: true };
+      setEditingProduct(copy);
+      navigate('add-product');
+      showToast('Article duplicated — update the required details and save');
+    });
+  }
+
   function deleteProduct(product) {
     if (!permissions.canDelete) return showToast('Your account does not have permission to delete articles', 'error');
     requireAuth(() => {
@@ -456,6 +469,7 @@ function AppInner() {
               products={products}
               initialFilters={catalogFilters}
               onEdit={permissions.canEdit ? openEditForm : undefined}
+              onDuplicate={permissions.canAdd ? duplicateProduct : undefined}
               onDelete={permissions.canDelete ? deleteProduct : undefined}
               isAuthed={isAuthed}
               lookupCode={lookupEmployeeCode}

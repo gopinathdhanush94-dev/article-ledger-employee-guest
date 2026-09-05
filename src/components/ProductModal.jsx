@@ -78,7 +78,7 @@ function CartonSection({ type, tone, qty, mrp, unitMrp, dimensions, weight }) {
   );
 }
 
-export default function ProductModal({ product: p, isAuthed, onClose, onEdit, onDelete, onPrev, onNext }) {
+export default function ProductModal({ product: p, isAuthed, onClose, onEdit, onDuplicate, onDelete, onPrev, onNext }) {
   const off = discountPct(p.mrp, p.sp);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -248,6 +248,7 @@ export default function ProductModal({ product: p, isAuthed, onClose, onEdit, on
 
               <footer className="pd-actions">
                 {onEdit && <button className="btn btn-primary" onClick={onEdit}>✎&nbsp; Edit Article</button>}
+                {onDuplicate && <button className="btn btn-secondary" onClick={onDuplicate}>⧉&nbsp; Duplicate Article</button>}
                 {isAuthed && <button className="btn btn-secondary" onClick={() => setShowHistory(v => !v)}>◷&nbsp; History {history.length > 0 && <span>({history.length})</span>}</button>}
                 {onDelete && <button className="btn btn-danger" onClick={onDelete}>♲&nbsp; Delete</button>}
               </footer>

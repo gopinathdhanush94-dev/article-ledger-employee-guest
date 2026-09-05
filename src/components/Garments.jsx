@@ -1,9 +1,12 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
 import { fmtINR, uniqueSorted, extractYear } from '../lib/helpers.js';
 import { ResetIcon, DownloadIcon } from './Icons.jsx';
 import { useHideOnScroll } from '../lib/useHideOnScroll.js';
 import CatalogueExport from './CatalogueExport.jsx';
+import ScannerModal from './ScannerModal.jsx';
+import { ScanIcon } from './Icons.jsx';
 
 const SHEET_ORDER = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUNE'];
 
@@ -51,6 +54,7 @@ export default function Garments({ garments, initialFilters, onEdit, onDelete })
   const [year, setYear] = useState('');
   const [selected, setSelected] = useState(null);
   const [showCatalogueExport, setShowCatalogueExport] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
   const controlsHidden = useHideOnScroll();
 
   useEffect(() => {
@@ -146,6 +150,58 @@ export default function Garments({ garments, initialFilters, onEdit, onDelete })
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [selected, filtered]);
 
+  // Scanner rows cover both garment-level master codes and individual size/article codes.
+  // Each scan row carries the group key so the scanner can open the complete garment style.
+  const scanRows = useMemo(() => {
+    const rows = [];
+    grouped.forEach(g => {
+      if (g.master_ean || g.master_article) {
+        rows.push({ ...g, id: `master-${g.key}`, ean: g.master_ean || '', article_no: g.master_article || '', model: g.customer_model || g.model_name || '' });
+      }
+      g.sizes.forEach((s, i) => {
+        rows.push({ ...g, id: s.id || `size-${g.key}-${i}`, ean: s.ean || '', article_no: s.article || '', model: g.customer_model || g.model_name || '', __garmentGroupKey: g.key });
+      });
+    });
+    return rows;
+  }, [grouped]);
+
+  const lookupGarmentCode = async (raw) => {
+    const value = String(raw || '').trim();
+    if (!value) return null;
+    const candidates = [];
+    try {
+      const url = new URL(value);
+      ['qr', 'garment', 'ean', 'article', 'model'].forEach(key => {
+        const v = url.searchParams.get(key);
+        if (v) candidates.push(v);
+      });
+    } catch (_) {}
+    candidates.push(value);
+
+    for (const code of candidates) {
+      for (const field of ['ean', 'article', 'master_ean', 'master_article', 'customer_model', 'model1']) {
+        const { data, error } = await supabase.from('garments').select('*').eq(field, code).limit(1);
+        if (error) throw error;
+        const row = data?.[0];
+        if (row) {
+          const groupKey = [row.source_file, row.sheet, row.excel_name, row.color, row.customer_model].join('|');
+          return { ...row, id: row.id, ean: row.ean || row.master_ean || '', article_no: row.article || row.master_article || '', model: row.customer_model || row.model1 || row.model_name || '', __garmentGroupKey: groupKey };
+        }
+      }
+    }
+    return null;
+  };
+
+  function handleGarmentScan(row) {
+    setShowScanner(false);
+    const groupKey = row?.__garmentGroupKey || [row?.source_file, row?.sheet, row?.excel_name, row?.color, row?.customer_model].join('|');
+    const hit = grouped.find(g => g.key === groupKey);
+    if (hit) {
+      setSelected(hit);
+      setQ(String(row.ean || row.article_no || row.model || ''));
+    }
+  }
+
   function resetFilters() { setQ(''); setBrand(''); setModelName(''); setMonth(''); setYear(''); }
 
   function downloadXlsx() {
@@ -174,12 +230,15 @@ export default function Garments({ garments, initialFilters, onEdit, onDelete })
     <>
       <div className={`controls${controlsHidden ? ' controls-hidden' : ''}`}>
         <div className="controls-row">
-          <div className="search-box">
+          <div className="search-box search-box-enhanced garment-search-box">
+            <span className="search-glyph">⌕</span>
             <input
-              placeholder="Search by style, brand, color, EAN or article…"
+              placeholder="Search style, brand, color, EAN or article…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
+            {q && <button type="button" className="search-clear" onClick={() => setQ('')} aria-label="Clear search">×</button>}
+            <button type="button" className="search-scan-btn" onClick={() => setShowScanner(true)} aria-label="Scan garment QR or barcode" title="Scan garment QR / barcode"><ScanIcon /></button>
           </div>
           <select value={brand} onChange={(e) => setBrand(e.target.value)}>
             <option value="">All brands</option>
@@ -264,11 +323,19 @@ export default function Garments({ garments, initialFilters, onEdit, onDelete })
       )}
 
       {showCatalogueExport && <CatalogueExport type="garment" rows={filtered} onClose={() => setShowCatalogueExport(false)} />}
+      {showScanner && <ScannerModal products={scanRows} lookupCode={lookupGarmentCode} onClose={() => setShowScanner(false)} onScan={handleGarmentScan} />}
     </>
   );
 }
 
 function GarmentModal({ garment: g, onClose, onEdit, onDelete, onPrev, onNext }) {
+  const [showImageViewer, setShowImageViewer] = useState(false);
+  useEffect(() => {
+    if (!showImageViewer) return undefined;
+    const onKeyDown = (e) => { if (e.key === 'Escape') setShowImageViewer(false); };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showImageViewer]);
   return (
     <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       {onPrev && <button className="modal-nav-btn prev" onClick={onPrev} title="Previous">‹</button>}
@@ -276,7 +343,7 @@ function GarmentModal({ garment: g, onClose, onEdit, onDelete, onPrev, onNext })
         <button className="modal-close" onClick={onClose}>✕</button>
         <div className="modal-grid">
           <div className="modal-img no-blend">
-            {g.image_url ? <img src={g.image_url} alt={g.excel_name} /> : <div className="no-img">NO IMAGE ON FILE</div>}
+            {g.image_url ? <button type="button" className="garment-image-button" onClick={() => setShowImageViewer(true)} aria-label="View garment image larger"><img src={g.image_url} alt={g.excel_name} /></button> : <div className="no-img">NO IMAGE ON FILE</div>}
           </div>
           <div className="modal-body">
             <span className="cat-tag">{g.model_name || 'Garment'}</span>
@@ -332,6 +399,16 @@ function GarmentModal({ garment: g, onClose, onEdit, onDelete, onPrev, onNext })
         </div>
       </div>
       {onNext && <button className="modal-nav-btn next" onClick={onNext} title="Next">›</button>}
+      {showImageViewer && g.image_url && createPortal(
+        <div className="pd-image-viewer" role="dialog" aria-modal="true" aria-label="Garment image viewer" onClick={(e) => { if (e.target === e.currentTarget) setShowImageViewer(false); }}>
+          <button type="button" className="pd-image-viewer-close" onClick={() => setShowImageViewer(false)} aria-label="Close image viewer">✕</button>
+          <div className="pd-image-viewer-content" onClick={e => e.stopPropagation()}>
+            <img src={g.image_url} alt={g.excel_name || 'Garment'} />
+            <div className="pd-image-viewer-caption">Click outside or press Esc to close</div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

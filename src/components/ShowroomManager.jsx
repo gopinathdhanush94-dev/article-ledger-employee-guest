@@ -62,6 +62,9 @@ export default function ShowroomManager({ canEdit = false }) {
   const [qrLoading, setQrLoading] = useState(false);
   const [qrError, setQrError] = useState('');
   const [qrDownloading, setQrDownloading] = useState(false);
+  const [videoEditor, setVideoEditor] = useState(null);
+  const [videoDraft, setVideoDraft] = useState('');
+  const [videoSaving, setVideoSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -69,7 +72,7 @@ export default function ShowroomManager({ canEdit = false }) {
     try {
       while (true) {
         const { data, error: err } = await supabase.from('showroom_items')
-          .select('id,source_type,source_id,ean,article_no,name,brand,model,category,description,image_url,features,dimensions,featured,featured_rank,visible,created_at,updated_at')
+          .select('id,source_type,source_id,ean,article_no,name,brand,model,category,description,image_url,features,dimensions,featured,featured_rank,visible,video_url,created_at,updated_at')
           .order('featured', { ascending: false }).order('featured_rank', { ascending: true, nullsFirst: false }).order('visible', { ascending: false }).order('created_at', { ascending: false })
           .range(from, from + pageSize - 1);
         if (err) throw err;
@@ -180,6 +183,20 @@ export default function ShowroomManager({ canEdit = false }) {
     finally { setBulkBusy(false); }
   }
 
+
+  async function saveVideoUrl() {
+    if (!videoEditor || !canEdit) return;
+    setVideoSaving(true); setError('');
+    try {
+      const value = String(videoDraft || '').trim();
+      const { data, error: err } = await supabase.from('showroom_items').update({ video_url: value || null }).eq('id', videoEditor.id).select('id,video_url,updated_at').single();
+      if (err) throw err;
+      setItems(prev => prev.map(item => item.id === videoEditor.id ? { ...item, ...data } : item));
+      setVideoEditor(null);
+      setVideoDraft('');
+    } catch (err) { setError(err?.message || 'Could not save product video'); }
+    finally { setVideoSaving(false); }
+  }
 
   async function prepareQrLabels() {
     const selected = items.filter(item => selectedIds.has(item.id));
@@ -303,7 +320,7 @@ export default function ShowroomManager({ canEdit = false }) {
         {loading ? <div className="showroom-manager-empty">Loading showroom items…</div> : !filtered.length ? <div className="showroom-manager-empty"><strong>No matching showroom items</strong><span>Try a different search or filter.</span></div> : (
           <div className="showroom-manager-table-wrap"><table className="showroom-manager-table"><thead><tr>
             <th className="showroom-select-col"><input type="checkbox" checked={allFilteredSelected} onChange={toggleSelectAllFiltered} aria-label="Select all matching showroom items" /></th>
-            <th>Product</th><th>Type</th><th>Article / EAN</th><th>Category</th><th>Guest visibility</th><th>Featured</th>
+            <th>Product</th><th>Type</th><th>Article / EAN</th><th>Category</th><th>Guest visibility</th><th>Featured</th><th>Media</th>
           </tr></thead><tbody>{filtered.map(item => <tr key={item.id} className={selectedIds.has(item.id) ? 'selected' : ''}>
             <td className="showroom-select-col"><input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelected(item.id)} aria-label={`Select ${nameFor(item)}`} /></td>
             <td><div className="showroom-manager-product">{imageFor(item) ? <img src={imageFor(item)} alt="" loading="lazy" /> : <div className="showroom-manager-thumb">{String(item.category || item.source_type || 'P').slice(0,1).toUpperCase()}</div>}<div><strong>{nameFor(item)}</strong><span>{[item.brand,item.model].filter(Boolean).join(' · ') || '—'}</span></div></div></td>
@@ -312,10 +329,22 @@ export default function ShowroomManager({ canEdit = false }) {
             <td><button type="button" className={`showroom-star ${item.featured?'on':''}`} disabled={!canEdit || !item.visible || busyId===item.id} onClick={() => updateItem(item.id, item.featured
               ? { featured: false, featured_rank: null }
               : { featured: true, featured_rank: Math.max(0, ...featuredItems.map(row => Number(row.featured_rank) || 0)) + 1 })}>★ {item.featured?'Featured':'Feature'}</button></td>
+            <td><button type="button" className={`showroom-media-btn ${item.video_url ? 'has-media' : ''}`} disabled={!canEdit || busyId===item.id} onClick={() => { setVideoEditor(item); setVideoDraft(item.video_url || ''); }}>{item.video_url ? 'Video' : '+ Video'}</button></td>
 
           </tr>)}</tbody></table></div>
         )}
       </section>
+
+      {videoEditor && (
+        <div className="showroom-video-editor-backdrop" role="presentation" onMouseDown={e => { if (e.target === e.currentTarget && !videoSaving) setVideoEditor(null); }}>
+          <section className="showroom-video-editor" role="dialog" aria-modal="true" aria-label="Product video">
+            <div className="showroom-video-editor-head"><div><span className="showroom-manager-eyebrow">PRODUCT MEDIA</span><h2>{videoEditor.video_url ? 'Edit product video' : 'Add product video'}</h2><p>{nameFor(videoEditor)}</p></div><button type="button" className="showroom-qr-close" onClick={() => !videoSaving && setVideoEditor(null)} aria-label="Close">×</button></div>
+            <label className="showroom-video-editor-label">Video URL<input value={videoDraft} onChange={e => setVideoDraft(e.target.value)} placeholder="YouTube URL or direct .mp4 / .webm URL" autoFocus /></label>
+            <p className="showroom-video-editor-hint">Use a YouTube link or a direct MP4/WebM video URL. Leave empty to remove the video.</p>
+            <div className="showroom-video-editor-actions"><button type="button" className="btn" onClick={() => !videoSaving && setVideoEditor(null)}>Cancel</button><button type="button" className="btn btn-teal" onClick={saveVideoUrl} disabled={videoSaving}>{videoSaving ? 'Saving…' : 'Save video'}</button></div>
+          </section>
+        </div>
+      )}
 
       {qrOpen && (
         <div className="showroom-qr-modal-backdrop" role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) setQrOpen(false); }}>

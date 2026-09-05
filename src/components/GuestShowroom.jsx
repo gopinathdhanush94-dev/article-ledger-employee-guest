@@ -10,6 +10,31 @@ function getImage(item) {
   return item?.image_url || '';
 }
 
+function getVideo(item) {
+  return String(item?.video_url || '').trim();
+}
+
+function videoEmbedUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    if (url.hostname.includes('youtu.be')) {
+      const id = url.pathname.replace(/^\//, '').split('/')[0];
+      return id ? `https://www.youtube.com/embed/${id}?rel=0&modestbranding=1` : '';
+    }
+    if (url.hostname.includes('youtube.com')) {
+      const id = url.searchParams.get('v') || url.pathname.match(/\/(?:shorts|embed)\/([^/?]+)/)?.[1];
+      return id ? `https://www.youtube.com/embed/${id}?rel=0&modestbranding=1` : '';
+    }
+  } catch {}
+  return '';
+}
+
+function isDirectVideo(value) {
+  return /\.(mp4|webm|ogg)(?:[?#].*)?$/i.test(String(value || '').trim());
+}
+
 function displayName(item) {
   const candidates = [item?.description, item?.name, item?.model, item?.article_no];
   const value = candidates.find(v => {
@@ -41,6 +66,9 @@ function HeartIcon({ filled = false }) {
 }
 function CartIcon() {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h2l1.7 9.1a2 2 0 0 0 2 1.6h7.9a2 2 0 0 0 1.9-1.4L21 8H7"/><circle cx="10" cy="19" r="1.2"/><circle cx="18" cy="19" r="1.2"/></svg>;
+}
+function VideoIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9l5 3-5 3z" fill="currentColor" stroke="none"/></svg>;
 }
 function OrderIcon() {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v5h4M9 12h6M9 16h6M9 8h3"/></svg>;
@@ -433,6 +461,7 @@ function ProductCard({ item, onOpen, isFavourite, inCart, onToggleFavourite, onT
         <div className="showroom-product-image-wrap">
           {getImage(item) ? <img src={getImage(item)} alt="" loading="lazy" /> : <div className="showroom-image-fallback">{String(item?.category || 'PRODUCT').slice(0, 1).toUpperCase()}</div>}
           {item.featured && <span className="showroom-featured-pill">Featured</span>}
+          {getVideo(item) && <span className="showroom-video-pill"><VideoIcon /> Video</span>}
         </div>
         <div className="showroom-product-card-body">
           <div className="showroom-product-category">{item.category || item.source_type}</div>
@@ -571,6 +600,21 @@ function ProductDetail({ item, onBack, onScanAnother, isFavourite, inCart, onTog
             <section className="showroom-section">
               <div className="showroom-section-title">Dimensions</div>
               <p className="showroom-description">{item.dimensions}</p>
+            </section>
+          )}
+
+          {getVideo(item) && (
+            <section className="showroom-section showroom-video-section">
+              <div className="showroom-section-title showroom-video-title"><span>WATCH IN ACTION</span><strong>Product video</strong></div>
+              <div className="showroom-video-frame">
+                {videoEmbedUrl(getVideo(item)) ? (
+                  <iframe src={videoEmbedUrl(getVideo(item))} title={`${displayName(item)} product video`} loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen />
+                ) : isDirectVideo(getVideo(item)) ? (
+                  <video controls playsInline preload="metadata" poster={currentImage || undefined}><source src={getVideo(item)} /></video>
+                ) : (
+                  <a href={getVideo(item)} target="_blank" rel="noreferrer" className="showroom-video-link"><VideoIcon /> Open product video</a>
+                )}
+              </div>
             </section>
           )}
 
@@ -769,7 +813,7 @@ export default function GuestShowroom() {
       while (true) {
         const { data, error: err } = await supabase
           .from('showroom_items')
-          .select('id,source_type,ean,article_no,name,brand,model,category,description,image_url,features,dimensions,sku_l,sku_w,sku_h,sku_dim_unit,sku_nw,sku_gw,sku_wt_unit,featured,featured_rank,visible,created_at')
+          .select('id,source_type,ean,article_no,name,brand,model,category,description,image_url,features,dimensions,sku_l,sku_w,sku_h,sku_dim_unit,sku_nw,sku_gw,sku_wt_unit,featured,featured_rank,visible,video_url,created_at')
           .eq('visible', true)
           .order('featured', { ascending: false })
           .order('featured_rank', { ascending: true, nullsFirst: false })
@@ -997,6 +1041,31 @@ export default function GuestShowroom() {
                 </div>
               </div>
             )}
+          </section>
+        )}
+
+        {items.filter(x => x.visible).length > 0 && (
+          <section className="showroom-home-section showroom-new-arrivals" aria-label="New arrivals">
+            <div className="showroom-block-heading showroom-home-section-heading"><div><span>JUST IN</span><h2>New arrivals</h2></div><div className="showroom-result-count">Latest additions</div></div>
+            <div className="showroom-mini-grid">
+              {items.filter(x => x.visible).slice().sort((a,b) => String(b.created_at || '').localeCompare(String(a.created_at || ''))).slice(0, 4).map(item => <ProductCard key={`new-${item.id}`} item={item} onOpen={openItem} isFavourite={isFavourite(item)} inCart={inCart(item)} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} />)}
+            </div>
+          </section>
+        )}
+
+        {categories.filter(c => c !== 'All').length > 0 && (
+          <section className="showroom-home-section showroom-category-showcase" aria-label="Shop by category">
+            <div className="showroom-block-heading showroom-home-section-heading"><div><span>EXPLORE</span><h2>Shop by category</h2></div><div className="showroom-result-count">Choose a collection</div></div>
+            <div className="showroom-category-tiles">
+              {categories.filter(c => c !== 'All').slice(0, 8).map(cat => {
+                const representative = items.find(x => x.visible && String(x.category || '') === String(cat) && getImage(x));
+                const count = items.filter(x => x.visible && String(x.category || '') === String(cat)).length;
+                return <button type="button" className="showroom-category-tile" key={cat} onClick={() => { setCollectionMode('all'); setSearch(''); setCategory(cat); requestAnimationFrame(() => document.getElementById('showroom-collection')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }}>
+                  <div className="showroom-category-tile-image">{representative ? <img src={getImage(representative)} alt="" loading="lazy" /> : <span>{String(cat).slice(0,1).toUpperCase()}</span>}</div>
+                  <div><strong>{cat}</strong><small>{count} product{count === 1 ? '' : 's'}</small></div><ChevronRightIcon />
+                </button>;
+              })}
+            </div>
           </section>
         )}
 

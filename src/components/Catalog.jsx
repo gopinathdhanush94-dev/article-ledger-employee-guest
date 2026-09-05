@@ -7,7 +7,7 @@ import ScannerModal from './ScannerModal.jsx';
 import { useHideOnScroll } from '../lib/useHideOnScroll.js';
 import CatalogueExport from './CatalogueExport.jsx';
 
-export default function Catalog({ products, initialFilters, onEdit, onDelete, isAuthed, lookupCode }) {
+export default function Catalog({ products, initialFilters, onEdit, onDelete, isAuthed, lookupCode, active = true }) {
   const savedState = (() => {
     try { return JSON.parse(sessionStorage.getItem('article-ledger:catalog-state') || '{}'); } catch { return {}; }
   })();
@@ -36,17 +36,24 @@ export default function Catalog({ products, initialFilters, onEdit, onDelete, is
 
   useEffect(() => {
     try {
+      // Keep filter state across navigation, but never persist an open
+      // product modal. Persisting selectedId could reopen the last article
+      // after a reload and leave the modal over other screens.
       sessionStorage.setItem('article-ledger:catalog-state', JSON.stringify({
-        q, cat, brand, month, year, selectedId: selected?.id || null,
+        q, cat, brand, month, year,
       }));
     } catch {}
-  }, [q, cat, brand, month, year, selected?.id]);
+  }, [q, cat, brand, month, year]);
 
   useEffect(() => {
-    if (!products.length || selected || !savedState.selectedId) return;
-    const restored = products.find(product => String(product.id) === String(savedState.selectedId));
-    if (restored) setSelected(restored);
-  }, [products, selected, savedState.selectedId]);
+    if (!active) {
+      setSelected(null);
+      setShowCatalogueExport(false);
+      setShowScanner(false);
+      setAutoOpenPending(false);
+    }
+  }, [active]);
+
 
   // Each filter's dropdown is calculated from the other active filters.
   // This keeps the choices mutually consistent instead of showing the full
@@ -289,7 +296,7 @@ export default function Catalog({ products, initialFilters, onEdit, onDelete, is
         )}
       </main>
 
-      {selected && (
+      {active && selected && (
         <ProductModal
           product={selected}
           isAuthed={isAuthed}
@@ -307,8 +314,8 @@ export default function Catalog({ products, initialFilters, onEdit, onDelete, is
         />
       )}
 
-      {showCatalogueExport && <CatalogueExport type="general" rows={filtered} onClose={() => setShowCatalogueExport(false)} />}
-      {showScanner && <ScannerModal products={products} lookupCode={lookupCode} onClose={() => setShowScanner(false)} onScan={(product) => { setShowScanner(false); setQ(String(product.ean || product.article_no || product.model || '')); setSelected(product); }} />}
+      {active && showCatalogueExport && <CatalogueExport type="general" rows={filtered} onClose={() => setShowCatalogueExport(false)} />}
+      {active && showScanner && <ScannerModal products={products} lookupCode={lookupCode} onClose={() => setShowScanner(false)} onScan={(product) => { setShowScanner(false); setQ(String(product.ean || product.article_no || product.model || '')); setSelected(product); }} />}
     </>
   );
 }

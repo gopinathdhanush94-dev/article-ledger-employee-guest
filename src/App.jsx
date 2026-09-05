@@ -459,6 +459,7 @@ function AppInner() {
               onDelete={permissions.canDelete ? deleteProduct : undefined}
               isAuthed={isAuthed}
               lookupCode={lookupEmployeeCode}
+              active={view === 'catalog'}
               canEdit={permissions.canEdit}
               canDelete={permissions.canDelete}
             />

@@ -35,8 +35,77 @@ function isDirectVideo(value) {
   return /\.(mp4|webm|ogg)(?:[?#].*)?$/i.test(String(value || '').trim());
 }
 
+function normalizeGarmentSize(value) {
+  return String(value ?? '').trim().toUpperCase().replace(/\s+/g, '').replace(/[–—]/g, '-').replace(/\//g, '-').replace(/Y$/, '');
+}
+
+function garmentSizeCategory(value) {
+  const size = normalizeGarmentSize(value);
+  if (!size) return '';
+  if (['2-3','3-4','5-6','7-8'].includes(size)) return 'Kids';
+  if (['9-10','11-12','13-14'].includes(size)) return 'Teen';
+  if (['XS','S','M','L','XL','2XL','28','30','32','34','36','38'].includes(size)) return 'Adult';
+  if (['3XL','4XL','5XL'].includes(size)) return 'Plus';
+  const numeric = Number(size);
+  return Number.isFinite(numeric) && numeric >= 28 && numeric <= 38 ? 'Adult' : '';
+}
+
+function garmentCategoryFromSizes(sizes) {
+  const cats = [...new Set((sizes || []).map(garmentSizeCategory).filter(Boolean))];
+  return cats.length === 1 ? cats[0] : (cats.length > 1 ? 'Mixed Sizes' : 'Garments');
+}
+
+function garmentSizeSort(a, b) {
+  const order = ['2-3','3-4','5-6','7-8','9-10','11-12','13-14','XS','S','M','L','XL','2XL','28','30','32','34','36','38','3XL','4XL','5XL'];
+  const ai = order.indexOf(normalizeGarmentSize(a)), bi = order.indexOf(normalizeGarmentSize(b));
+  if (ai !== -1 && bi !== -1) return ai - bi;
+  if (ai !== -1) return -1; if (bi !== -1) return 1;
+  return String(a).localeCompare(String(b), undefined, { numeric: true });
+}
+
+async function enrichGarmentShowroomItems(items) {
+  const rows = Array.isArray(items) ? items : [];
+  const garmentItems = rows.filter(item => item?.source_type === 'garment' && item?.source_id);
+  if (!garmentItems.length) return rows;
+  const sourceIds = garmentItems.map(item => item.source_id);
+  const anchors = [];
+  for (let i = 0; i < sourceIds.length; i += 200) {
+    const { data, error } = await supabase.from('garments').select('id,customer_model,color,size,description,excel_name,model_name,model1,brand,image_url,master_ean,master_article').in('id', sourceIds.slice(i, i + 200));
+    if (error) throw error;
+    anchors.push(...(data || []));
+  }
+  const anchorById = new Map(anchors.map(row => [String(row.id), row]));
+  const models = [...new Set(anchors.map(row => String(row.customer_model || '').trim()).filter(Boolean))];
+  const related = [];
+  for (let i = 0; i < models.length; i += 100) {
+    const { data, error } = await supabase.from('garments').select('id,customer_model,color,size,description,excel_name,model_name,model1,brand,image_url,master_ean,master_article').in('customer_model', models.slice(i, i + 100));
+    if (error) throw error;
+    related.push(...(data || []));
+  }
+  const byModel = new Map();
+  for (const row of [...anchors, ...related]) {
+    const model = String(row.customer_model || '').trim();
+    if (!model) continue;
+    if (!byModel.has(model)) byModel.set(model, []);
+    byModel.get(model).push(row);
+  }
+  return rows.map(item => {
+    if (item?.source_type !== 'garment' || !item?.source_id) return item;
+    const anchor = anchorById.get(String(item.source_id));
+    if (!anchor) return item;
+    const model = String(anchor.customer_model || '').trim();
+    const modelRows = byModel.get(model) || [anchor];
+    const anchorColor = String(anchor.color || '').trim();
+    const styleRows = modelRows.filter(row => String(row.color || '').trim() === anchorColor);
+    const usableRows = styleRows.length ? styleRows : [anchor];
+    const sizes = [...new Set(usableRows.map(row => String(row.size || '').trim()).filter(Boolean))].sort(garmentSizeSort);
+    const colors = [...new Set(modelRows.map(row => String(row.color || '').trim()).filter(Boolean))].sort((a,b) => a.localeCompare(b));
+    return { ...item, name: anchor.excel_name || item.name, model: anchor.customer_model || anchor.model_name || anchor.model1 || item.model, description: anchor.description || item.description, image_url: anchor.image_url || item.image_url, category: garmentCategoryFromSizes(sizes), garment_meta: { fabric: anchor.description || item.description || '', sizes, colors, category: garmentCategoryFromSizes(sizes), master_ean: anchor.master_ean || item.ean || '', master_article: anchor.master_article || item.article_no || '' } };
+  });
+}
+
 function displayName(item) {
-  const candidates = [item?.description, item?.name, item?.model, item?.article_no];
+  const candidates = item?.source_type === 'garment' ? [item?.name, item?.model, item?.description, item?.article_no] : [item?.description, item?.name, item?.model, item?.article_no];
   const value = candidates.find(v => {
     const t = String(v ?? '').trim();
     return t && !/^untitled product$/i.test(t);
@@ -580,21 +649,28 @@ function ProductDetail({ item, onBack, onScanAnother, isFavourite, inCart, onTog
             </button>
           </div>
 
-          <section className="showroom-section showroom-sku-section">
-            <div className="showroom-section-title">SKU details</div>
-            <div className="showroom-sku-grid">
-              {[
-                ['EAN', item.ean],
-                ['Model', item.model],
-                ['Category', item.category],
-                ['L × B × H', skuDimensions(item)],
-                ['Net weight', skuWeight(item, true)],
-                ['Gross weight', skuWeight(item, false)],
-              ].map(([label, value]) => (
-                <div className="showroom-sku-item" key={label}><span>{label}</span><strong>{value || '-'}</strong></div>
-              ))}
-            </div>
-          </section>
+          {item.source_type === 'garment' ? (
+            <section className="showroom-section showroom-garment-section">
+              <div className="showroom-section-title">Garment details</div>
+              <div className="showroom-garment-detail-grid">
+                <div className="showroom-garment-detail-card"><span>Fabric</span><strong>{item.garment_meta?.fabric || '—'}</strong></div>
+                <div className="showroom-garment-detail-card"><span>Category</span><strong>{item.garment_meta?.category || item.category || '—'}</strong></div>
+                <div className="showroom-garment-detail-card"><span>Colours available</span><strong>{item.garment_meta?.colors?.join(', ') || '—'}</strong></div>
+                <div className="showroom-garment-detail-card showroom-garment-detail-wide"><span>Sizes available</span><div className="showroom-size-chip-list">{(item.garment_meta?.sizes || []).length ? item.garment_meta.sizes.map(size => <span className="showroom-size-chip" key={size}>{size}</span>) : <strong>—</strong>}</div></div>
+                <div className="showroom-garment-detail-card"><span>Master EAN</span><strong>{item.garment_meta?.master_ean || item.ean || '—'}</strong></div>
+                <div className="showroom-garment-detail-card"><span>Master Article</span><strong>{item.garment_meta?.master_article || item.article_no || '—'}</strong></div>
+              </div>
+            </section>
+          ) : (
+            <section className="showroom-section showroom-sku-section">
+              <div className="showroom-section-title">SKU details</div>
+              <div className="showroom-sku-grid">
+                {[['EAN', item.ean], ['Model', item.model], ['Category', item.category], ['L × B × H', skuDimensions(item)], ['Net weight', skuWeight(item, true)], ['Gross weight', skuWeight(item, false)]].map(([label, value]) => (
+                  <div className="showroom-sku-item" key={label}><span>{label}</span><strong>{value || '-'}</strong></div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {item.dimensions && !skuDimensions(item) && (
             <section className="showroom-section">
@@ -618,7 +694,7 @@ function ProductDetail({ item, onBack, onScanAnother, isFavourite, inCart, onTog
             </section>
           )}
 
-          {(item.description || highlights.length) && (
+          {item.source_type !== 'garment' && (item.description || highlights.length) && (
             <section className="showroom-section">
               <div className="showroom-section-title">About this product</div>
               {item.description && <p className="showroom-description">{item.description}</p>}
@@ -802,8 +878,9 @@ export default function GuestShowroom() {
         if (qrError) throw qrError;
         const item = Array.isArray(data) ? data[0] : data;
         if (!item?.id) throw new Error('This QR code is not linked to a visible showroom product.');
-        setItems([item]);
-        setSelected(item);
+        const enrichedItem = (await enrichGarmentShowroomItems([item]))[0] || item;
+        setItems([enrichedItem]);
+        setSelected(enrichedItem);
         return;
       }
 
@@ -824,7 +901,7 @@ export default function GuestShowroom() {
         if (!data || data.length < pageSize) break;
         from += pageSize;
       }
-      setItems(all);
+      setItems(await enrichGarmentShowroomItems(all));
     } catch (err) {
       setError(err?.message || 'Unable to load showroom products');
     } finally {
@@ -953,8 +1030,9 @@ export default function GuestShowroom() {
     }
     const item = Array.isArray(data) ? data[0] : data;
     if (!item?.id) return null;
-    setItems(current => current.some(existing => String(existing.id) === String(item.id)) ? current : [...current, item]);
-    return item;
+    const enriched = (await enrichGarmentShowroomItems([item]))[0] || item;
+    setItems(current => current.some(existing => String(existing.id) === String(enriched.id)) ? current : [...current, enriched]);
+    return enriched;
   }
   function handleScan(item) {
     if (!item) return;

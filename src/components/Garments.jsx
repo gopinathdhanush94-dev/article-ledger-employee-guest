@@ -206,7 +206,7 @@ export default function Garments({ garments, initialFilters, onEdit, onDelete })
 
   function downloadXlsx() {
     const headers = ['Source', 'Month', 'Style Name', 'Garment Type', 'Brand', 'Color', 'Customer Model', 'Internal Model',
-      'Description', 'Origin', 'MOI', 'MFD', 'Master EAN', 'Master Article',
+      'Fabric', 'Origin', 'MOI', 'MFD', 'Master EAN', 'Master Article',
       'Size', 'Set Qty', 'EAN', 'Article', 'MRP', 'RRP'];
     const aoa = [headers];
     filtered.forEach(g => {
@@ -353,7 +353,7 @@ function GarmentModal({ garment: g, onClose, onEdit, onDelete, onPrev, onNext })
               <tbody>
                 <tr><td>Customer Model</td><td>{g.customer_model || '—'}</td></tr>
                 <tr><td>Internal Model</td><td>{g.model1 || '—'}</td></tr>
-                <tr><td>Description</td><td>{g.description || '—'}</td></tr>
+                <tr><td>Fabric</td><td>{g.description || '—'}</td></tr>
                 <tr><td>Origin</td><td>{g.origin || '—'}</td></tr>
                 <tr><td>MOI / MFD</td><td>{[g.moi, g.mfd].filter(Boolean).join(' / ') || '—'}</td></tr>
                 <tr><td>Master EAN</td><td>{g.master_ean || '—'}</td></tr>

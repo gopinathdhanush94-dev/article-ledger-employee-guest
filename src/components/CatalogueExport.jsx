@@ -110,7 +110,7 @@ function buildGarmentHtml(rows, chosen, includeImage) {
       chosen.includes('excel_name') && label('Style Name', g.excel_name), chosen.includes('model_name') && label('Garment Type', g.model_name),
       chosen.includes('brand') && label('Brand', g.brand), chosen.includes('color') && label('Color', g.color),
       chosen.includes('customer_model') && label('Customer Model', g.customer_model), chosen.includes('model1') && label('Internal Model', g.model1),
-      chosen.includes('description') && label('Description', g.description), chosen.includes('origin') && label('Origin', g.origin),
+      chosen.includes('description') && label('Fabric', g.description), chosen.includes('origin') && label('Origin', g.origin),
       chosen.includes('moi') && label('MOI', g.moi), chosen.includes('mfd') && label('MFD', g.mfd),
       chosen.includes('master_ean') && label('Master EAN', g.master_ean), chosen.includes('master_article') && label('Master Article', g.master_article),
       chosen.includes('month') && label('Month', g.sheet), chosen.includes('year') && label('Year', g.year),

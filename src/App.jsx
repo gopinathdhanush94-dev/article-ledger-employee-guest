@@ -15,6 +15,7 @@ import UserManagement from './components/UserManagement.jsx';
 import ShowroomManager from './components/ShowroomManager.jsx';
 import ShowroomOrders from './components/ShowroomOrders.jsx';
 import AccessGate from './components/AccessGate.jsx';
+import ImageExport from './components/ImageExport.jsx';
 
 const BrandIconSVG = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -90,7 +91,7 @@ function AppInner() {
     // example after a browser/tab restore). The hash is our durable route
     // bookmark, while sessionStorage also protects against a history entry
     // that has been recreated by the browser.
-    const validViews = new Set(['home', 'catalog', 'garments', 'add-product', 'add-garment', 'showroom', 'showroom-orders']);
+    const validViews = new Set(['home', 'catalog', 'garments', 'add-product', 'add-garment', 'showroom', 'showroom-orders', 'image-export']);
     const hashView = String(window.location.hash || '').replace(/^#/, '');
     let savedView = '';
     try { savedView = sessionStorage.getItem('article-ledger:view') || ''; } catch {}
@@ -375,6 +376,7 @@ function AppInner() {
     'add-garment': permissions.canViewAddProduct,
     showroom: permissions.canViewShowroom,
     'showroom-orders': permissions.canManageQuotations,
+    'image-export': permissions.canViewGeneral,
   };
 
   useEffect(() => {
@@ -436,6 +438,7 @@ function AppInner() {
           {permissions.canViewAddProduct && <button className={(view === 'add-product' || view === 'add-garment') ? 'active' : ''} onClick={openAddChoice}>+ Add Product</button>}
           {permissions.canViewShowroom && <button className={view === 'showroom' ? 'active' : ''} onClick={() => navigate('showroom')}>Showroom</button>}
           {permissions.canManageQuotations && <button className={view === 'showroom-orders' ? 'active' : ''} onClick={() => navigate('showroom-orders')}>Quotation Requests</button>}
+          {permissions.canViewGeneral && <button className={view === 'image-export' ? 'active' : ''} onClick={() => navigate('image-export')}>Image Export</button>}
         </nav>
       </header>
 
@@ -514,6 +517,9 @@ function AppInner() {
           </div>
           <div style={{ display: view === 'showroom-orders' ? 'block' : 'none' }}>
             <ShowroomOrders canManageQuotations={permissions.canManageQuotations} />
+          </div>
+          <div style={{ display: view === 'image-export' ? 'block' : 'none' }}>
+            {permissions.canViewGeneral && <ImageExport products={products} garments={garments} onClose={() => navigate('home')} />}
           </div>
           <div style={{ display: view === 'add-garment' ? 'block' : 'none' }}>
             <GarmentForm

@@ -44,10 +44,9 @@ function garmentSizeCategory(value) {
   if (!size) return '';
   if (['2-3','3-4','5-6','7-8'].includes(size)) return 'Kids';
   if (['9-10','11-12','13-14'].includes(size)) return 'Teen';
-  if (['XS','S','M','L','XL','2XL','28','30','32','34','36','38'].includes(size)) return 'Adult';
+  if (['XS','S','M','L','XL','2XL','28','30','34','36','38'].includes(size)) return 'Adult';
   if (['3XL','4XL','5XL'].includes(size)) return 'Plus';
-  const numeric = Number(size);
-  return Number.isFinite(numeric) && numeric >= 28 && numeric <= 38 ? 'Adult' : '';
+  return '';
 }
 
 function garmentCategoryFromSizes(sizes) {
@@ -65,9 +64,9 @@ function garmentSizeSort(a, b) {
 
 async function enrichGarmentShowroomItems(items) {
   const rows = Array.isArray(items) ? items : [];
-  const garmentItems = rows.filter(item => item?.source_type === 'garment' && item?.source_id);
+  const garmentItems = rows.filter(item => item?.source_type === 'garment');
   if (!garmentItems.length) return rows;
-  const sourceIds = garmentItems.map(item => item.source_id);
+  const sourceIds = garmentItems.map(item => item.source_id).filter(Boolean);
   const anchors = [];
   for (let i = 0; i < sourceIds.length; i += 200) {
     const { data, error } = await supabase.from('garments').select('id,customer_model,color,size,description,excel_name,model_name,model1,brand,image_url,master_ean,master_article').in('id', sourceIds.slice(i, i + 200));
@@ -75,7 +74,27 @@ async function enrichGarmentShowroomItems(items) {
     anchors.push(...(data || []));
   }
   const anchorById = new Map(anchors.map(row => [String(row.id), row]));
-  const models = [...new Set(anchors.map(row => String(row.customer_model || '').trim()).filter(Boolean))];
+  const missingAnchors = garmentItems.filter(item => !item.source_id || !anchorById.has(String(item.source_id)));
+  const resolvedAnchors = [];
+  for (const item of missingAnchors) {
+    const candidates = [
+      ['ean', item.ean],
+      ['article', item.article_no],
+      ['customer_model', item.model],
+      ['model1', item.model],
+    ].filter(([, value]) => String(value || '').trim());
+    let found = null;
+    for (const [field, value] of candidates) {
+      const { data, error } = await supabase.from('garments').select('id,customer_model,color,size,description,excel_name,model_name,model1,brand,image_url,master_ean,master_article').eq(field, String(value).trim()).limit(1);
+      if (error) throw error;
+      if (data?.[0]) { found = data[0]; break; }
+    }
+    if (found) {
+      anchorById.set(String(found.id), found);
+      resolvedAnchors.push(found);
+    }
+  }
+  const models = [...new Set([...anchors, ...resolvedAnchors].map(row => String(row.customer_model || '').trim()).filter(Boolean))];
   const related = [];
   for (let i = 0; i < models.length; i += 100) {
     const { data, error } = await supabase.from('garments').select('id,customer_model,color,size,description,excel_name,model_name,model1,brand,image_url,master_ean,master_article').in('customer_model', models.slice(i, i + 100));
@@ -90,17 +109,22 @@ async function enrichGarmentShowroomItems(items) {
     byModel.get(model).push(row);
   }
   return rows.map(item => {
-    if (item?.source_type !== 'garment' || !item?.source_id) return item;
-    const anchor = anchorById.get(String(item.source_id));
-    if (!anchor) return item;
-    const model = String(anchor.customer_model || '').trim();
-    const modelRows = byModel.get(model) || [anchor];
-    const anchorColor = String(anchor.color || '').trim();
-    const styleRows = modelRows.filter(row => String(row.color || '').trim() === anchorColor);
-    const usableRows = styleRows.length ? styleRows : [anchor];
-    const sizes = [...new Set(usableRows.map(row => String(row.size || '').trim()).filter(Boolean))].sort(garmentSizeSort);
+    if (item?.source_type !== 'garment') return item;
+    const anchor = item.source_id ? anchorById.get(String(item.source_id)) : null;
+    const fallbackAnchor = !anchor ? resolvedAnchors.find(row =>
+      (item.ean && String(row.ean || '') === String(item.ean)) ||
+      (item.article_no && String(row.article || '') === String(item.article_no)) ||
+      (item.model && String(row.customer_model || '') === String(item.model)) ||
+      (item.model && String(row.model1 || '') === String(item.model))
+    ) : null;
+    const resolvedAnchor = anchor || fallbackAnchor;
+    if (!resolvedAnchor) return item;
+    const anchorRow = resolvedAnchor;
+    const model = String(anchorRow.customer_model || '').trim();
+    const modelRows = byModel.get(model) || [anchorRow];
+    const sizes = [...new Set(modelRows.map(row => String(row.size || '').trim()).filter(Boolean))].sort(garmentSizeSort);
     const colors = [...new Set(modelRows.map(row => String(row.color || '').trim()).filter(Boolean))].sort((a,b) => a.localeCompare(b));
-    return { ...item, name: anchor.excel_name || item.name, model: anchor.customer_model || anchor.model_name || anchor.model1 || item.model, description: anchor.description || item.description, image_url: anchor.image_url || item.image_url, category: garmentCategoryFromSizes(sizes), garment_meta: { fabric: anchor.description || item.description || '', sizes, colors, category: garmentCategoryFromSizes(sizes), master_ean: anchor.master_ean || item.ean || '', master_article: anchor.master_article || item.article_no || '' } };
+    return { ...item, name: anchorRow.excel_name || item.name, model: anchorRow.customer_model || anchorRow.model_name || anchorRow.model1 || item.model, description: anchorRow.description || item.description, image_url: anchorRow.image_url || item.image_url, category: garmentCategoryFromSizes(sizes), garment_meta: { fabric: anchorRow.description || item.description || '', sizes, colors, category: garmentCategoryFromSizes(sizes), master_ean: anchorRow.master_ean || item.ean || '', master_article: anchorRow.master_article || item.article_no || '' } };
   });
 }
 
@@ -655,7 +679,7 @@ function ProductDetail({ item, onBack, onScanAnother, isFavourite, inCart, onTog
               <div className="showroom-garment-detail-grid">
                 <div className="showroom-garment-detail-card"><span>Fabric</span><strong>{item.garment_meta?.fabric || '—'}</strong></div>
                 <div className="showroom-garment-detail-card"><span>Category</span><strong>{item.garment_meta?.category || item.category || '—'}</strong></div>
-                <div className="showroom-garment-detail-card"><span>Colours available</span><strong>{item.garment_meta?.colors?.join(', ') || '—'}</strong></div>
+                <div className="showroom-garment-detail-card"><span>Colours available</span><div className="showroom-size-chip-list">{(item.garment_meta?.colors || []).length ? item.garment_meta.colors.map(color => <span className="showroom-size-chip showroom-colour-chip" key={color}>{color}</span>) : <strong>—</strong>}</div></div>
                 <div className="showroom-garment-detail-card showroom-garment-detail-wide"><span>Sizes available</span><div className="showroom-size-chip-list">{(item.garment_meta?.sizes || []).length ? item.garment_meta.sizes.map(size => <span className="showroom-size-chip" key={size}>{size}</span>) : <strong>—</strong>}</div></div>
                 <div className="showroom-garment-detail-card"><span>Master EAN</span><strong>{item.garment_meta?.master_ean || item.ean || '—'}</strong></div>
                 <div className="showroom-garment-detail-card"><span>Master Article</span><strong>{item.garment_meta?.master_article || item.article_no || '—'}</strong></div>
@@ -890,7 +914,7 @@ export default function GuestShowroom() {
       while (true) {
         const { data, error: err } = await supabase
           .from('showroom_items')
-          .select('id,source_type,ean,article_no,name,brand,model,category,description,image_url,features,dimensions,sku_l,sku_w,sku_h,sku_dim_unit,sku_nw,sku_gw,sku_wt_unit,featured,featured_rank,visible,video_url,created_at')
+          .select('id,source_type,source_id,ean,article_no,name,brand,model,category,description,image_url,features,dimensions,sku_l,sku_w,sku_h,sku_dim_unit,sku_nw,sku_gw,sku_wt_unit,featured,featured_rank,visible,video_url,created_at')
           .eq('visible', true)
           .order('featured', { ascending: false })
           .order('featured_rank', { ascending: true, nullsFirst: false })

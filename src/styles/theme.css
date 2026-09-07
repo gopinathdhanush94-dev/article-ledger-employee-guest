@@ -1541,3 +1541,59 @@ body.scanner-open{
   .image-export-actions { justify-content: stretch; }
   .image-export-actions .btn { flex: 1; }
 }
+
+
+/* ---------- Final modal navigation visibility ----------
+   Keep previous/next controls at the viewport edges so wide desktop modals
+   cannot cover them. This applies to both product and garment employee modals. */
+.product-overlay .modal-nav-btn,
+.overlay .modal-nav-btn{
+  position:fixed !important;
+  top:50% !important;
+  transform:translateY(-50%) !important;
+  z-index:100002 !important;
+  width:46px !important;
+  height:46px !important;
+  border-radius:50% !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  background:rgba(255,255,255,.96) !important;
+  color:#172033 !important;
+  border:1px solid rgba(148,163,184,.28) !important;
+  box-shadow:0 12px 30px rgba(15,23,42,.22) !important;
+  font-size:28px !important;
+  line-height:1 !important;
+  pointer-events:auto !important;
+}
+.product-overlay .modal-nav-btn.prev,
+.overlay .modal-nav-btn.prev{left:14px !important;right:auto !important;}
+.product-overlay .modal-nav-btn.next,
+.overlay .modal-nav-btn.next{right:14px !important;left:auto !important;}
+.product-overlay .modal-nav-btn:hover,
+.overlay .modal-nav-btn:hover{
+  background:#fff !important;
+  color:var(--primary) !important;
+  transform:translateY(-50%) scale(1.05) !important;
+}
+.garment-type-tag{
+  align-self:flex-start;
+  font-family:'Inter',sans-serif;
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  color:var(--text-soft);
+  background:rgba(148,163,184,.10);
+  border:1px solid rgba(148,163,184,.18);
+  padding:3px 7px;
+  border-radius:20px;
+}
+@media(max-width:760px){
+  .product-overlay .modal-nav-btn,
+  .overlay .modal-nav-btn{width:38px !important;height:38px !important;font-size:22px !important;}
+  .product-overlay .modal-nav-btn.prev,
+  .overlay .modal-nav-btn.prev{left:6px !important;}
+  .product-overlay .modal-nav-btn.next,
+  .overlay .modal-nav-btn.next{right:6px !important;}
+}

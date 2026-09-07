@@ -50,6 +50,7 @@ export default function Garments({ garments, initialFilters, onEdit, onDelete })
   const [q, setQ] = useState('');
   const [brand, setBrand] = useState('');
   const [modelName, setModelName] = useState('');
+  const [sizeCategory, setSizeCategory] = useState('');
   const [month, setMonth] = useState('');
   const [year, setYear] = useState('');
   const [selected, setSelected] = useState(null);
@@ -61,6 +62,7 @@ export default function Garments({ garments, initialFilters, onEdit, onDelete })
     if (initialFilters) {
       setBrand(initialFilters.brand || '');
       setModelName(initialFilters.modelName || '');
+      setSizeCategory(initialFilters.sizeCategory || '');
       setMonth(initialFilters.month || '');
       setYear(initialFilters.year || '');
       setQ(initialFilters.search || '');
@@ -75,6 +77,7 @@ export default function Garments({ garments, initialFilters, onEdit, onDelete })
   const rowsForFilter = (exclude) => grouped.filter(g => {
     if (exclude !== 'brand' && brand && g.brand !== brand) return false;
     if (exclude !== 'modelName' && modelName && g.model_name !== modelName) return false;
+    if (exclude !== 'sizeCategory' && sizeCategory && garmentCategoryFromSizes(g.sizes.map(s => s.size)) !== sizeCategory) return false;
     if (exclude !== 'month' && month && String(g.sheet || '').toUpperCase() !== month) return false;
     if (exclude !== 'year' && year && g.year !== year) return false;
     return true;
@@ -82,6 +85,8 @@ export default function Garments({ garments, initialFilters, onEdit, onDelete })
 
   const brands = uniqueSorted(rowsForFilter('brand'), 'brand');
   const modelNames = uniqueSorted(rowsForFilter('modelName'), 'model_name');
+  const sizeCategories = [...new Set(rowsForFilter('sizeCategory').map(g => garmentCategoryFromSizes(g.sizes.map(s => s.size)).trim()).filter(Boolean))]
+    .sort((a, b) => ['Kids','Teen','Adult','Plus','Mixed Sizes','Garments'].indexOf(a) - ['Kids','Teen','Adult','Plus','Mixed Sizes','Garments'].indexOf(b) || a.localeCompare(b));
   const months = [...new Set(rowsForFilter('month').map(g => String(g.sheet || '').toUpperCase()).filter(Boolean))]
     .sort((a, b) => {
       const ai = SHEET_ORDER.indexOf(a), bi = SHEET_ORDER.indexOf(b);
@@ -101,7 +106,11 @@ export default function Garments({ garments, initialFilters, onEdit, onDelete })
 
   useEffect(() => {
     if (modelName && !modelNames.includes(modelName)) setModelName('');
-  }, [modelName, modelNames.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [modelName, modelNames.join('|')]);
+
+  useEffect(() => {
+    if (sizeCategory && !sizeCategories.includes(sizeCategory)) setSizeCategory('');
+  }, [sizeCategory, sizeCategories.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (month && !months.includes(month)) setMonth('');
@@ -116,6 +125,7 @@ export default function Garments({ garments, initialFilters, onEdit, onDelete })
     return grouped.filter(g => {
       if (brand && g.brand !== brand) return false;
       if (modelName && g.model_name !== modelName) return false;
+      if (sizeCategory && garmentCategoryFromSizes(g.sizes.map(s => s.size)) !== sizeCategory) return false;
       if (month && String(g.sheet || '').toUpperCase() !== month) return false;
       if (year && g.year !== year) return false;
       if (query) {
@@ -127,7 +137,7 @@ export default function Garments({ garments, initialFilters, onEdit, onDelete })
       }
       return true;
     });
-  }, [grouped, q, brand, modelName, month, year]);
+  }, [grouped, q, brand, modelName, sizeCategory, month, year]);
 
   useEffect(() => {
     if (!selected) return;
@@ -202,7 +212,7 @@ export default function Garments({ garments, initialFilters, onEdit, onDelete })
     }
   }
 
-  function resetFilters() { setQ(''); setBrand(''); setModelName(''); setMonth(''); setYear(''); }
+  function resetFilters() { setQ(''); setBrand(''); setModelName(''); setSizeCategory(''); setMonth(''); setYear(''); }
 
   function downloadXlsx() {
     const headers = ['Source', 'Month', 'Style Name', 'Garment Type', 'Brand', 'Color', 'Customer Model', 'Internal Model',
@@ -248,6 +258,10 @@ export default function Garments({ garments, initialFilters, onEdit, onDelete })
             <option value="">All garment types</option>
             {modelNames.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
+          <select value={sizeCategory} onChange={(e) => setSizeCategory(e.target.value)}>
+            <option value="">All size categories</option>
+            {sizeCategories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
           <select value={month} onChange={(e) => setMonth(e.target.value)}>
             <option value="">All months</option>
             {months.map(m => <option key={m} value={m}>{m}</option>)}
@@ -279,6 +293,7 @@ export default function Garments({ garments, initialFilters, onEdit, onDelete })
           <div className="grid">
             {filtered.map(g => {
               const sizeList = g.sizes.map(s => s.size).filter(Boolean).join(', ');
+              const sizeCategoryLabel = garmentCategoryFromSizes(g.sizes.map(s => s.size));
               return (
                 <article key={g.key} className="card" onClick={() => setSelected(g)}>
                   {g.sizes.some(s => s.custom) && <div className="custom-flag">Added</div>}
@@ -286,7 +301,8 @@ export default function Garments({ garments, initialFilters, onEdit, onDelete })
                     {g.image_url ? <img src={g.image_url} alt={g.excel_name} loading="lazy" /> : <div className="no-img">NO IMAGE<br />ON FILE</div>}
                   </div>
                   <div className="card-body">
-                    <span className="cat-tag">{g.model_name || 'Garment'}</span>
+                    <span className="cat-tag">{sizeCategoryLabel}</span>
+                    {g.model_name && <span className="garment-type-tag">{g.model_name}</span>}
                     <h3 className="card-title">{g.excel_name || g.customer_model || 'Unnamed style'}</h3>
                     <div className="card-brand">{g.brand}{g.color ? ` · ${g.color}` : ''}</div>
                     <div style={{ fontFamily: "'Inter',sans-serif", fontSize: 10.5, color: 'var(--ink-soft)' }}>

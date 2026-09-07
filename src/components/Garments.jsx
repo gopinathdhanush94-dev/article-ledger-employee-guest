@@ -10,6 +10,30 @@ import { ScanIcon } from './Icons.jsx';
 
 const SHEET_ORDER = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUNE'];
 
+// Keep the size classification local to the employee Garments screen as well.
+// This must not depend on the Guest Showroom module being mounted.
+function normalizeGarmentSize(value) {
+  return String(value ?? '').trim().toUpperCase()
+    .replace(/\s+/g, '')
+    .replace(/[–—]/g, '-')
+    .replace(/\//g, '-');
+}
+
+function garmentSizeCategory(value) {
+  const size = normalizeGarmentSize(value);
+  if (!size) return '';
+  if (['2-3','3-4','5-6','7-8'].includes(size)) return 'Kids';
+  if (['9-10','11-12','13-14'].includes(size)) return 'Teen';
+  if (['XS','S','M','L','XL','2XL','28','30','32','34','36','38'].includes(size)) return 'Adult';
+  if (['3XL','4XL','5XL'].includes(size)) return 'Plus';
+  return '';
+}
+
+function garmentCategoryFromSizes(sizes) {
+  const cats = [...new Set((sizes || []).map(garmentSizeCategory).filter(Boolean))];
+  return cats.length === 1 ? cats[0] : (cats.length > 1 ? 'Mixed Sizes' : 'Garments');
+}
+
 function groupGarments(rows) {
   const map = new Map();
   for (const r of rows) {

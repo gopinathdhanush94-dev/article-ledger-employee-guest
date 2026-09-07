@@ -153,6 +153,14 @@ export function AuthProvider({ children }) {
     // getSession is the authoritative initial snapshot. It may race with the
     // INITIAL_SESSION event above, so applySession treats the same user as an
     // already-known session and avoids duplicate UI transitions.
+    let bootstrapTimedOut = false;
+    const bootstrapTimeout = window.setTimeout(() => {
+      if (cancelled || !mountedRef.current) return;
+      bootstrapTimedOut = true;
+      console.warn('Supabase session bootstrap timed out; continuing to access screen.');
+      setLoading(false);
+    }, 8000);
+
     supabase.auth.getSession()
       .then(({ data }) => {
         if (cancelled || !mountedRef.current) return;
@@ -172,6 +180,14 @@ export function AuthProvider({ children }) {
           setSession(null);
           setProfile(null);
           setLoading(false);
+        }
+      })
+      .finally(() => {
+        window.clearTimeout(bootstrapTimeout);
+        if (!bootstrapTimedOut && !cancelled && mountedRef.current) {
+          // A guest/no-session bootstrap should always release the access gate.
+          // Authenticated users remain gated only while their profile is loading.
+          setLoading(current => current && !sessionUserIdRef.current ? false : current);
         }
       });
 

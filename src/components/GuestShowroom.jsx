@@ -902,7 +902,12 @@ export default function GuestShowroom() {
         if (qrError) throw qrError;
         const item = Array.isArray(data) ? data[0] : data;
         if (!item?.id) throw new Error('This QR code is not linked to a visible showroom product.');
-        const enrichedItem = (await enrichGarmentShowroomItems([item]))[0] || item;
+        let enrichedItem = item;
+        try {
+          enrichedItem = (await enrichGarmentShowroomItems([item]))[0] || item;
+        } catch (enrichError) {
+          console.warn('Garment QR enrichment failed; showing base item:', enrichError);
+        }
         setItems([enrichedItem]);
         setSelected(enrichedItem);
         return;
@@ -925,7 +930,12 @@ export default function GuestShowroom() {
         if (!data || data.length < pageSize) break;
         from += pageSize;
       }
-      setItems(await enrichGarmentShowroomItems(all));
+      try {
+        setItems(await enrichGarmentShowroomItems(all));
+      } catch (enrichError) {
+        console.warn('Garment showroom enrichment failed; showing base showroom data:', enrichError);
+        setItems(all);
+      }
     } catch (err) {
       setError(err?.message || 'Unable to load showroom products');
     } finally {
@@ -1054,7 +1064,12 @@ export default function GuestShowroom() {
     }
     const item = Array.isArray(data) ? data[0] : data;
     if (!item?.id) return null;
-    const enriched = (await enrichGarmentShowroomItems([item]))[0] || item;
+    let enriched = item;
+    try {
+      enriched = (await enrichGarmentShowroomItems([item]))[0] || item;
+    } catch (enrichError) {
+      console.warn('Garment item enrichment failed; showing base item:', enrichError);
+    }
     setItems(current => current.some(existing => String(existing.id) === String(enriched.id)) ? current : [...current, enriched]);
     return enriched;
   }

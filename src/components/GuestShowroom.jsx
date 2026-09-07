@@ -116,6 +116,33 @@ function productCode(item) {
   return item?.ean || item?.article_no || item?.model || '';
 }
 
+
+function GuestScrollToTopButton() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setVisible(window.scrollY > 420);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  if (!visible) return null;
+
+  return (
+    <button
+      type="button"
+      className="scroll-top-btn guest-scroll-top-btn"
+      onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+      aria-label="Back to top"
+      title="Back to top"
+    >
+      <span aria-hidden="true">↑</span>
+      <span className="scroll-top-label">Top</span>
+    </button>
+  );
+}
+
 function SearchIcon() {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.6" /><path d="M16 16l5 5" /></svg>;
 }
@@ -1139,6 +1166,7 @@ export default function GuestShowroom() {
         <ProductDetail item={selected} onBack={closeDetail} onScanAnother={openScanner} isFavourite={isFavourite(selected)} inCart={inCart(selected)} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} />
         {scannerOpen && <ScannerModal products={items} onScan={handleScan} lookupCode={lookupGuestCode} onClose={closeScanner} />}
         {orderHistoryOpen && <OrderHistoryPopup onClose={closeOrderHistory} session={session} />}
+        <GuestScrollToTopButton />
       {popup && <SelectionPopup mode={popup} products={items} onClose={closePopup} onOpen={openItemFromPopup} isFavourite={isFavourite} inCart={inCart} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} cartQuantities={cartQuantities} setCartQuantities={setCartQuantities} customerProfile={profile} session={session} storagePrefix={storagePrefix} />}
       </div>
     );
@@ -1221,6 +1249,7 @@ export default function GuestShowroom() {
       {scannerOpen && <ScannerModal products={items} onScan={handleScan} lookupCode={lookupGuestCode} onClose={closeScanner} />}
       {orderHistoryOpen && <OrderHistoryPopup onClose={closeOrderHistory} session={session} />}
       {popup && <SelectionPopup mode={popup} products={items} onClose={closePopup} onOpen={openItemFromPopup} isFavourite={isFavourite} inCart={inCart} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} cartQuantities={cartQuantities} setCartQuantities={setCartQuantities} customerProfile={profile} session={session} storagePrefix={storagePrefix} />}
+      <GuestScrollToTopButton />
     </div>
   );
 }

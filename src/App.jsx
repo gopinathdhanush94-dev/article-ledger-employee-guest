@@ -11,6 +11,7 @@ import Garments from './components/Garments.jsx';
 import GarmentForm from './components/GarmentForm.jsx';
 import Calculator from './components/Calculator.jsx';
 import DataQualityCenter from './components/DataQualityCenter.jsx';
+import ImageEnhancer from './components/ImageEnhancer.jsx';
 import UserManagement from './components/UserManagement.jsx';
 import ShowroomManager from './components/ShowroomManager.jsx';
 import ShowroomOrders from './components/ShowroomOrders.jsx';
@@ -76,6 +77,7 @@ function AppInner() {
   const [showCalculator, setShowCalculator] = useState(false);
   const [showDataQuality, setShowDataQuality] = useState(false);
   const [showUserManagement, setShowUserManagement] = useState(false);
+  const [showImageEnhancer, setShowImageEnhancer] = useState(false);
 
   const [garments, setGarments] = useState([]);
   const [garmentsLoading, setGarmentsLoading] = useState(true);
@@ -460,6 +462,7 @@ function AppInner() {
           {permissions.canViewAddProduct && <button className={(view === 'add-product' || view === 'add-garment') ? 'active' : ''} onClick={openAddChoice}>+ Add Product</button>}
           {permissions.canViewShowroom && <button className={view === 'showroom' ? 'active' : ''} onClick={() => navigate('showroom')}>Showroom</button>}
           {permissions.canManageQuotations && <button className={view === 'showroom-orders' ? 'active' : ''} onClick={() => navigate('showroom-orders')}>Quotation Requests</button>}
+          {permissions.canEdit && <button className="ai-studio-tab" onClick={() => setShowImageEnhancer(true)} title="Enhance catalogue product images with Gemini">✨ AI Image Studio</button>}
         </nav>
       </header>
 
@@ -592,6 +595,13 @@ function AppInner() {
         products={products}
         onGoToCatalog={goToCatalog}
       />
+
+      {showImageEnhancer && (
+        <ImageEnhancer
+          products={products}
+          onClose={() => setShowImageEnhancer(false)}
+        />
+      )}
 
       {showLogin && (
         <LoginModal

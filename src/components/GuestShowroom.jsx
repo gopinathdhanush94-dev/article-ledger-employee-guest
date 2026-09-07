@@ -738,9 +738,20 @@ export default function GuestShowroom() {
   const savedGuestState = (() => {
     try { return JSON.parse(sessionStorage.getItem(guestStateKey) || '{}'); } catch { return {}; }
   })();
+  const showroomCacheKey = `article-ledger:guest-showroom-cache:${storageIdentity}`;
+  const readShowroomCache = () => {
+    try {
+      const raw = sessionStorage.getItem(showroomCacheKey);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed?.items) ? parsed.items : [];
+    } catch { return []; }
+  };
+  const cachedShowroomItems = readShowroomCache();
 
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState(cachedShowroomItems);
+  const [loading, setLoading] = useState(cachedShowroomItems.length === 0);
+  const hasInitialShowroomCacheRef = useRef(cachedShowroomItems.length > 0);
   const [error, setError] = useState('');
   const [search, setSearch] = useState(savedGuestState.search || '');
   const [category, setCategory] = useState(savedGuestState.category || 'All');
@@ -865,12 +876,11 @@ export default function GuestShowroom() {
   });
 
   const load = async () => {
-    setLoading(true);
+    // Render the last successful snapshot immediately on refresh, then
+    // revalidate the live showroom in the background.
+    if (!hasInitialShowroomCacheRef.current) setLoading(true);
     setError('');
     try {
-      // QR labels use a guest-safe public lookup so a customer can scan the
-      // printed label and open the exact showroom product without needing to
-      // sign in first. Only visible showroom-safe fields are returned.
       if (directQrCode) {
         const { data, error: qrError } = await supabase.rpc('public_lookup_showroom_product', { p_code: String(directQrCode) });
         if (qrError) throw qrError;
@@ -884,6 +894,7 @@ export default function GuestShowroom() {
         }
         setItems([enrichedItem]);
         setSelected(enrichedItem);
+        try { sessionStorage.setItem(showroomCacheKey, JSON.stringify({ savedAt: Date.now(), items: [enrichedItem] })); } catch {}
         return;
       }
 
@@ -904,19 +915,56 @@ export default function GuestShowroom() {
         if (!data || data.length < pageSize) break;
         from += pageSize;
       }
+
+      // Show the live base catalogue immediately. Garment metadata is an
+      // enhancement and must never block the first paint of the showroom.
+      setItems(all);
+      setLoading(false);
+      hasInitialShowroomCacheRef.current = true;
+
       try {
-        setItems(await enrichGarmentShowroomItems(all));
+        const cacheItems = all.map(item => ({
+          id: item.id, source_type: item.source_type, source_id: item.source_id,
+          ean: item.ean, article_no: item.article_no, name: item.name,
+          brand: item.brand, model: item.model, category: item.category,
+          description: item.description, image_url: item.image_url,
+          featured: item.featured, featured_rank: item.featured_rank,
+          visible: item.visible, video_url: item.video_url, created_at: item.created_at
+        }));
+        sessionStorage.setItem(showroomCacheKey, JSON.stringify({ savedAt: Date.now(), items: cacheItems }));
+      } catch (cacheError) {
+        console.warn('Showroom cache skipped:', cacheError);
+      }
+
+      // Enrich after the catalogue is already usable.
+      try {
+        const enriched = await enrichGarmentShowroomItems(all);
+        setItems(enriched);
+        try {
+          const cacheItems = enriched.map(item => ({
+            id: item.id, source_type: item.source_type, source_id: item.source_id,
+            ean: item.ean, article_no: item.article_no, name: item.name,
+            brand: item.brand, model: item.model, category: item.category,
+            description: item.description, image_url: item.image_url,
+            featured: item.featured, featured_rank: item.featured_rank,
+            visible: item.visible, video_url: item.video_url, created_at: item.created_at,
+            garment_meta: item.garment_meta || undefined
+          }));
+          sessionStorage.setItem(showroomCacheKey, JSON.stringify({ savedAt: Date.now(), items: cacheItems }));
+        } catch {}
       } catch (enrichError) {
-        console.warn('Garment showroom enrichment failed; showing base showroom data:', enrichError);
-        setItems(all);
+        console.warn('Garment showroom enrichment failed; keeping base showroom data:', enrichError);
       }
     } catch (err) {
-      setError(err?.message || 'Unable to load showroom products');
+      if (!hasInitialShowroomCacheRef.current || !items.length) {
+        setError(err?.message || 'Unable to load showroom products');
+      } else {
+        console.warn('Showroom refresh failed; keeping cached catalogue:', err);
+      }
     } finally {
       setLoading(false);
     }
   };
-
   useEffect(() => { load(); }, []);
   useEffect(() => {
     let cancelled = false;
@@ -1157,21 +1205,6 @@ export default function GuestShowroom() {
           </section>
         )}
 
-        {categories.filter(c => c !== 'All').length > 0 && (
-          <section className="showroom-home-section showroom-category-showcase" aria-label="Shop by category">
-            <div className="showroom-block-heading showroom-home-section-heading"><div><span>EXPLORE</span><h2>Shop by category</h2></div><div className="showroom-result-count">Choose a collection</div></div>
-            <div className="showroom-category-tiles">
-              {[...categories.filter(c => c !== 'All' && ['Garments','Kids','Teens','Adult','Plus'].includes(c)), ...categories.filter(c => c !== 'All' && !['Garments','Kids','Teens','Adult','Plus'].includes(c))].slice(0, 12).map(cat => {
-                const representative = items.find(x => x.visible && String(x.category || '') === String(cat) && getImage(x));
-                const count = items.filter(x => x.visible && String(x.category || '') === String(cat)).length;
-                return <button type="button" className="showroom-category-tile" key={cat} onClick={() => { setCollectionMode('all'); setSearch(''); setCategory(cat); requestAnimationFrame(() => document.getElementById('showroom-collection')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }}>
-                  <div className="showroom-category-tile-image">{representative ? <img src={getImage(representative)} alt="" loading="lazy" /> : <span>{String(cat).slice(0,1).toUpperCase()}</span>}</div>
-                  <div><strong>{cat}</strong><small>{count} product{count === 1 ? '' : 's'}</small></div><ChevronRightIcon />
-                </button>;
-              })}
-            </div>
-          </section>
-        )}
 
         <section className="showroom-section-block" id="showroom-collection">
           <div className="showroom-block-heading"><div><span>{collectionMode === 'favourites' ? 'YOUR SELECTION' : collectionMode === 'cart' ? 'YOUR CART' : collectionMode === 'featured' ? 'HANDPICKED' : 'COLLECTION'}</span><h2>{collectionMode === 'favourites' ? 'Favourite products' : collectionMode === 'cart' ? 'Cart' : collectionMode === 'featured' ? 'Featured products' : 'Browse products'}</h2></div><div className="showroom-result-count">{loading ? 'Loading…' : `${filtered.length} products`}</div></div>

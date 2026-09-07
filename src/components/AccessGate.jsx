@@ -6,24 +6,22 @@ function RoleChoice({ onSelect }) {
   return (
     <div className="access-shell">
       <div className="access-card access-choice-card">
-        <div className="access-brand-icon" aria-hidden="true">G</div>
-        <p className="access-eyebrow">G-Records</p>
-        <h1>Article Ledger</h1>
-        <p className="access-subtitle">Choose how you want to continue</p>
+        <div className="access-brand-row"><div className="access-brand-icon" aria-hidden="true">G</div><div><p className="access-eyebrow">G-Records</p><h1>Article Ledger</h1></div></div>
+        <div className="access-welcome"><span className="access-kicker">PRODUCT INTELLIGENCE</span><h2>One workspace for your catalogue.</h2><p>Manage articles internally or explore the public showroom through a clean, fast workspace.</p></div>
 
         <div className="access-role-grid">
           <button className="access-role employee" onClick={() => onSelect('employee')}>
-            <span className="access-role-icon">👨‍💼</span>
-            <span className="access-role-title">Employee</span>
-            <span className="access-role-copy">Access the internal Article Ledger</span>
+            <span className="access-role-icon">↗</span>
+            <span className="access-role-title">Employee workspace</span>
+            <span className="access-role-copy">Catalogue, garments, data quality, showroom management and quotations.</span><span className="access-role-cta">Enter workspace →</span>
           </button>
           <button className="access-role guest" onClick={() => onSelect('guest')}>
-            <span className="access-role-icon">👤</span>
-            <span className="access-role-title">Guest</span>
-            <span className="access-role-copy">Continue to the showroom experience</span>
+            <span className="access-role-icon">◌</span>
+            <span className="access-role-title">Guest showroom</span>
+            <span className="access-role-copy">Browse public products, scan QR labels, favourites, cart and quotations.</span><span className="access-role-cta">Explore showroom →</span>
           </button>
         </div>
-        <p className="access-private-note">Internal product information is protected.</p>
+        <div className="access-feature-strip"><span>Fast search</span><span>QR ready</span><span>Role based</span><span>Supabase secured</span></div><p className="access-private-note">Internal product information is protected.</p>
       </div>
     </div>
   );

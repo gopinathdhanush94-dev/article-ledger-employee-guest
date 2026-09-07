@@ -15,6 +15,7 @@ import UserManagement from './components/UserManagement.jsx';
 import ShowroomManager from './components/ShowroomManager.jsx';
 import ShowroomOrders from './components/ShowroomOrders.jsx';
 import AccessGate from './components/AccessGate.jsx';
+import { readDataset, writeDataset } from './lib/dataCache.js';
 
 const BrandIconSVG = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -148,21 +149,22 @@ function AppInner() {
     return all;
   }
 
-  const loadProducts = useCallback(async () => {
-    setDataLoading(true);
+  const loadProducts = useCallback(async ({ background = false } = {}) => {
+    if (!background) setDataLoading(true);
     try {
       const data = await fetchAllRows('products');
       setProducts(data);
       setDataError(null);
       setHasLoadedOnce(true);
+      void writeDataset('products', data);
     } catch (err) {
       setDataError(err.message);
     }
     setDataLoading(false);
   }, []);
 
-  const loadGarments = useCallback(async () => {
-    setGarmentsLoading(true);
+  const loadGarments = useCallback(async ({ background = false } = {}) => {
+    if (!background) setGarmentsLoading(true);
     try {
       // Load garments independently of the General article list.
       // Avoid ordering by created_at here because some existing garment
@@ -183,6 +185,7 @@ function AppInner() {
       setGarments(all);
       setGarmentsError(null);
       setGarmentsHasLoadedOnce(true);
+      void writeDataset('garments', all);
     } catch (err) {
       console.error('Garment load failed:', err);
       setGarmentsError(err.message || 'Unable to load garment data');
@@ -191,7 +194,28 @@ function AppInner() {
     }
   }, []);
 
-  useEffect(() => { loadProducts(); loadGarments(); }, [loadProducts, loadGarments]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [cachedProducts, cachedGarments] = await Promise.all([readDataset('products'), readDataset('garments')]);
+      if (cancelled) return;
+      if (Array.isArray(cachedProducts?.data) && cachedProducts.data.length) {
+        setProducts(cachedProducts.data);
+        setHasLoadedOnce(true);
+        setDataLoading(false);
+      }
+      if (Array.isArray(cachedGarments?.data) && cachedGarments.data.length) {
+        setGarments(cachedGarments.data);
+        setGarmentsHasLoadedOnce(true);
+        setGarmentsLoading(false);
+      }
+      // Revalidate in the background. Products are prioritized because they
+      // power the first employee screen; garments can arrive just after.
+      void loadProducts({ background: true });
+      window.setTimeout(() => { if (!cancelled) void loadGarments({ background: true }); }, 180);
+    })();
+    return () => { cancelled = true; };
+  }, [loadProducts, loadGarments]);
 
   function requireAuth(action) {
     if (isAuthed) { action(); return; }
@@ -440,8 +464,10 @@ function AppInner() {
       </header>
 
       {dataLoading && !hasLoadedOnce && (
-        <div style={{ padding: 60, textAlign: 'center', fontFamily: "'Inter',sans-serif", color: 'var(--ink-soft)' }}>
-          Loading catalog…
+        <div className="app-loading-shell" role="status" aria-live="polite">
+          <div className="app-loading-spinner" />
+          <strong>Preparing Article Ledger</strong>
+          <span>Restoring your workspace and loading the latest catalogue…</span>
         </div>
       )}
 

@@ -766,9 +766,10 @@ export default function GuestShowroom() {
     try { return JSON.parse(sessionStorage.getItem(guestStateKey) || '{}'); } catch { return {}; }
   })();
   const showroomCacheKey = `article-ledger:guest-showroom-cache:${storageIdentity}`;
+  const writeShowroomCache = (payload) => { try { localStorage.setItem(showroomCacheKey, JSON.stringify(payload)); } catch { try { sessionStorage.setItem(showroomCacheKey, JSON.stringify(payload)); } catch {} } };
   const readShowroomCache = () => {
     try {
-      const raw = sessionStorage.getItem(showroomCacheKey);
+      const raw = localStorage.getItem(showroomCacheKey) || sessionStorage.getItem(showroomCacheKey);
       if (!raw) return [];
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed?.items) ? parsed.items : [];
@@ -921,7 +922,7 @@ export default function GuestShowroom() {
         }
         setItems([enrichedItem]);
         setSelected(enrichedItem);
-        try { sessionStorage.setItem(showroomCacheKey, JSON.stringify({ savedAt: Date.now(), items: [enrichedItem] })); } catch {}
+        try { writeShowroomCache({ savedAt: Date.now(), items: [enrichedItem] }); } catch {}
         return;
       }
 
@@ -958,7 +959,7 @@ export default function GuestShowroom() {
           featured: item.featured, featured_rank: item.featured_rank,
           visible: item.visible, video_url: item.video_url, created_at: item.created_at
         }));
-        sessionStorage.setItem(showroomCacheKey, JSON.stringify({ savedAt: Date.now(), items: cacheItems }));
+        writeShowroomCache({ savedAt: Date.now(), items: cacheItems });
       } catch (cacheError) {
         console.warn('Showroom cache skipped:', cacheError);
       }
@@ -977,7 +978,7 @@ export default function GuestShowroom() {
             visible: item.visible, video_url: item.video_url, created_at: item.created_at,
             garment_meta: item.garment_meta || undefined
           }));
-          sessionStorage.setItem(showroomCacheKey, JSON.stringify({ savedAt: Date.now(), items: cacheItems }));
+          writeShowroomCache({ savedAt: Date.now(), items: cacheItems });
         } catch {}
       } catch (enrichError) {
         console.warn('Garment showroom enrichment failed; keeping base showroom data:', enrichError);

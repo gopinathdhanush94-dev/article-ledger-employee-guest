@@ -76,62 +76,33 @@ async function enrichGarmentShowroomItems(items) {
   const garmentItems = rows.filter(item => item?.source_type === 'garment');
   if (!garmentItems.length) return rows;
 
-  const { data: garmentRows, error } = await supabase
-    .from('garments')
-    .select('id,customer_model,color,size,description,excel_name,model_name,model1,brand,image_url,master_ean,master_article,ean,article');
+  // Guest users cannot SELECT from public.garments because that table is
+  // intentionally employee-only. Use the small security-definer RPC that
+  // exposes only showroom-safe, aggregated garment metadata for visible items.
+  const { data: metaRows, error } = await supabase.rpc('public_showroom_garment_meta');
   if (error) throw error;
 
-  const byId = new Map((garmentRows || []).map(row => [String(row.id), row]));
-  const byEan = new Map();
-  const byArticle = new Map();
-  const byModel = new Map();
-  const byModelRows = new Map();
-  for (const row of garmentRows || []) {
-    if (row.ean) byEan.set(String(row.ean).trim(), row);
-    if (row.article) byArticle.set(String(row.article).trim(), row);
-    for (const key of [row.customer_model, row.model1]) {
-      const k = String(key || '').trim();
-      if (k && !byModel.has(k)) byModel.set(k, row);
-    }
-    const model = String(row.customer_model || '').trim();
-    if (model) {
-      if (!byModelRows.has(model)) byModelRows.set(model, []);
-      byModelRows.get(model).push(row);
-    }
-  }
-
+  const byShowroomId = new Map((metaRows || []).map(row => [String(row.showroom_id), row]));
   return rows.map(item => {
     if (item?.source_type !== 'garment') return item;
-    const anchor = (item.source_id && byId.get(String(item.source_id)))
-      || (item.ean && byEan.get(String(item.ean).trim()))
-      || (item.article_no && byArticle.get(String(item.article_no).trim()))
-      || (item.model && byModel.get(String(item.model).trim()));
-    if (!anchor) return item;
-
-    const model = String(anchor.customer_model || '').trim();
-    const modelRows = byModelRows.get(model) || [anchor];
-    const sizes = [...new Set(modelRows.map(row => String(row.size || '').trim()).filter(Boolean))].sort(garmentSizeSort);
-    const colors = [...new Set(modelRows.map(row => String(row.color || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-    const category = garmentCategoryFromSizes(sizes);
+    const meta = byShowroomId.get(String(item.id));
+    if (!meta) return item;
     return {
       ...item,
-      name: anchor.excel_name || item.name,
-      model: anchor.customer_model || anchor.model_name || anchor.model1 || item.model,
-      description: anchor.description || item.description,
-      image_url: anchor.image_url || item.image_url,
-      category,
+      name: meta.style_name || item.name,
+      model: meta.model || item.model,
+      image_url: meta.image_url || item.image_url,
+      category: garmentCategoryFromSizes(Array.isArray(meta.sizes) ? meta.sizes : []),
       garment_meta: {
-        fabric: anchor.description || item.description || '',
-        sizes,
-        colors,
-        category,
-        master_ean: anchor.master_ean || item.ean || '',
-        master_article: anchor.master_article || item.article_no || ''
+        fabric: meta.fabric || item.description || '',
+        sizes: Array.isArray(meta.sizes) ? meta.sizes : [],
+        colors: Array.isArray(meta.colors) ? meta.colors : [],
+        category: garmentCategoryFromSizes(Array.isArray(meta.sizes) ? meta.sizes : []),
+        master_ean: meta.master_ean || item.ean || ''
       }
     };
   });
 }
-
 function displayName(item) {
   const candidates = item?.source_type === 'garment' ? [item?.name, item?.model, item?.description, item?.article_no] : [item?.description, item?.name, item?.model, item?.article_no];
   const value = candidates.find(v => {
@@ -686,7 +657,6 @@ function ProductDetail({ item, onBack, onScanAnother, isFavourite, inCart, onTog
                 <div className="showroom-garment-detail-card"><span>Colours available</span><div className="showroom-size-chip-list">{(item.garment_meta?.colors || []).length ? item.garment_meta.colors.map(color => <span className="showroom-size-chip showroom-colour-chip" key={color}>{color}</span>) : <strong>—</strong>}</div></div>
                 <div className="showroom-garment-detail-card showroom-garment-detail-wide"><span>Sizes available</span><div className="showroom-size-chip-list">{(item.garment_meta?.sizes || []).length ? item.garment_meta.sizes.map(size => <span className="showroom-size-chip" key={size}>{size}</span>) : <strong>—</strong>}</div></div>
                 <div className="showroom-garment-detail-card"><span>Master EAN</span><strong>{item.garment_meta?.master_ean || item.ean || '—'}</strong></div>
-                <div className="showroom-garment-detail-card"><span>Master Article</span><strong>{item.garment_meta?.master_article || item.article_no || '—'}</strong></div>
               </div>
             </section>
           ) : (

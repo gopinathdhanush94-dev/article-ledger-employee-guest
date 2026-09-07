@@ -16,6 +16,7 @@ function normalizeGarmentSize(value) {
   return String(value ?? '').trim().toUpperCase()
     .replace(/\s+/g, '')
     .replace(/[–—]/g, '-')
+    .replace(/(?:YRS?|YEARS?)$/, '')
     .replace(/\//g, '-');
 }
 
@@ -23,7 +24,7 @@ function garmentSizeCategory(value) {
   const size = normalizeGarmentSize(value);
   if (!size) return '';
   if (['2-3','3-4','5-6','7-8'].includes(size)) return 'Kids';
-  if (['9-10','11-12','13-14'].includes(size)) return 'Teen';
+  if (['9-10','11-12','13-14'].includes(size)) return 'Teens';
   if (['XS','S','M','L','XL','2XL','28','30','32','34','36','38'].includes(size)) return 'Adult';
   if (['3XL','4XL','5XL'].includes(size)) return 'Plus';
   return '';
@@ -32,6 +33,14 @@ function garmentSizeCategory(value) {
 function garmentCategoryFromSizes(sizes) {
   const cats = [...new Set((sizes || []).map(garmentSizeCategory).filter(Boolean))];
   return cats.length === 1 ? cats[0] : (cats.length > 1 ? 'Mixed Sizes' : 'Garments');
+}
+
+function garmentSizeSort(a, b) {
+  const order = ['2-3','3-4','5-6','7-8','9-10','11-12','13-14','XS','S','M','L','XL','2XL','28','30','32','34','36','38','3XL','4XL','5XL'];
+  const ai = order.indexOf(normalizeGarmentSize(a)), bi = order.indexOf(normalizeGarmentSize(b));
+  if (ai !== -1 && bi !== -1) return ai - bi;
+  if (ai !== -1) return -1; if (bi !== -1) return 1;
+  return String(a).localeCompare(String(b), undefined, { numeric: true });
 }
 
 function groupGarments(rows) {
@@ -109,8 +118,12 @@ export default function Garments({ garments, initialFilters, onEdit, onDelete })
 
   const brands = uniqueSorted(rowsForFilter('brand'), 'brand');
   const modelNames = uniqueSorted(rowsForFilter('modelName'), 'model_name');
-  const sizeCategories = [...new Set(rowsForFilter('sizeCategory').map(g => garmentCategoryFromSizes(g.sizes.map(s => s.size)).trim()).filter(Boolean))]
-    .sort((a, b) => ['Kids','Teen','Adult','Plus','Mixed Sizes','Garments'].indexOf(a) - ['Kids','Teen','Adult','Plus','Mixed Sizes','Garments'].indexOf(b) || a.localeCompare(b));
+  // The size filter is deliberately limited to the four requested customer groups.
+  // Do not expose the generic `Garments` label as a size category.
+  const SIZE_CATEGORY_ORDER = ['Kids', 'Teens', 'Adult', 'Plus'];
+  const sizeCategories = SIZE_CATEGORY_ORDER.filter(category =>
+    rowsForFilter('sizeCategory').some(g => garmentCategoryFromSizes(g.sizes.map(s => s.size)) === category)
+  );
   const months = [...new Set(rowsForFilter('month').map(g => String(g.sheet || '').toUpperCase()).filter(Boolean))]
     .sort((a, b) => {
       const ai = SHEET_ORDER.indexOf(a), bi = SHEET_ORDER.indexOf(b);

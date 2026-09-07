@@ -36,15 +36,20 @@ function isDirectVideo(value) {
 }
 
 function normalizeGarmentSize(value) {
-  return String(value ?? '').trim().toUpperCase().replace(/\s+/g, '').replace(/[–—]/g, '-').replace(/\//g, '-').replace(/Y$/, '');
+  return String(value ?? '').trim().toUpperCase()
+    .replace(/\s+/g, '')
+    .replace(/[–—]/g, '-')
+    .replace(/\/(?!\d)/g, '-')
+    .replace(/(?:YRS?|YEARS?)$/, '')
+    .replace(/\//g, '-');
 }
 
 function garmentSizeCategory(value) {
   const size = normalizeGarmentSize(value);
   if (!size) return '';
   if (['2-3','3-4','5-6','7-8'].includes(size)) return 'Kids';
-  if (['9-10','11-12','13-14'].includes(size)) return 'Teen';
-  if (['XS','S','M','L','XL','2XL','28','30','34','36','38'].includes(size)) return 'Adult';
+  if (['9-10','11-12','13-14'].includes(size)) return 'Teens';
+  if (['XS','S','M','L','XL','2XL','28','30','32','34','36','38'].includes(size)) return 'Adult';
   if (['3XL','4XL','5XL'].includes(size)) return 'Plus';
   return '';
 }
@@ -62,69 +67,68 @@ function garmentSizeSort(a, b) {
   return String(a).localeCompare(String(b), undefined, { numeric: true });
 }
 
+// Enrich all visible garment showroom rows from the public garments table in one
+// bounded request. The previous implementation attempted one Supabase request
+// per missing source_id; the guest QR RPC intentionally returns source_id=null,
+// which could turn a 1000-row showroom load into hundreds/thousands of requests.
 async function enrichGarmentShowroomItems(items) {
   const rows = Array.isArray(items) ? items : [];
   const garmentItems = rows.filter(item => item?.source_type === 'garment');
   if (!garmentItems.length) return rows;
-  const sourceIds = garmentItems.map(item => item.source_id).filter(Boolean);
-  const anchors = [];
-  for (let i = 0; i < sourceIds.length; i += 200) {
-    const { data, error } = await supabase.from('garments').select('id,customer_model,color,size,description,excel_name,model_name,model1,brand,image_url,master_ean,master_article').in('id', sourceIds.slice(i, i + 200));
-    if (error) throw error;
-    anchors.push(...(data || []));
-  }
-  const anchorById = new Map(anchors.map(row => [String(row.id), row]));
-  const missingAnchors = garmentItems.filter(item => !item.source_id || !anchorById.has(String(item.source_id)));
-  const resolvedAnchors = [];
-  for (const item of missingAnchors) {
-    const candidates = [
-      ['ean', item.ean],
-      ['article', item.article_no],
-      ['customer_model', item.model],
-      ['model1', item.model],
-    ].filter(([, value]) => String(value || '').trim());
-    let found = null;
-    for (const [field, value] of candidates) {
-      const { data, error } = await supabase.from('garments').select('id,customer_model,color,size,description,excel_name,model_name,model1,brand,image_url,master_ean,master_article').eq(field, String(value).trim()).limit(1);
-      if (error) throw error;
-      if (data?.[0]) { found = data[0]; break; }
-    }
-    if (found) {
-      anchorById.set(String(found.id), found);
-      resolvedAnchors.push(found);
-    }
-  }
-  const models = [...new Set([...anchors, ...resolvedAnchors].map(row => String(row.customer_model || '').trim()).filter(Boolean))];
-  const related = [];
-  for (let i = 0; i < models.length; i += 100) {
-    const { data, error } = await supabase.from('garments').select('id,customer_model,color,size,description,excel_name,model_name,model1,brand,image_url,master_ean,master_article').in('customer_model', models.slice(i, i + 100));
-    if (error) throw error;
-    related.push(...(data || []));
-  }
+
+  const { data: garmentRows, error } = await supabase
+    .from('garments')
+    .select('id,customer_model,color,size,description,excel_name,model_name,model1,brand,image_url,master_ean,master_article,ean,article');
+  if (error) throw error;
+
+  const byId = new Map((garmentRows || []).map(row => [String(row.id), row]));
+  const byEan = new Map();
+  const byArticle = new Map();
   const byModel = new Map();
-  for (const row of [...anchors, ...related]) {
+  const byModelRows = new Map();
+  for (const row of garmentRows || []) {
+    if (row.ean) byEan.set(String(row.ean).trim(), row);
+    if (row.article) byArticle.set(String(row.article).trim(), row);
+    for (const key of [row.customer_model, row.model1]) {
+      const k = String(key || '').trim();
+      if (k && !byModel.has(k)) byModel.set(k, row);
+    }
     const model = String(row.customer_model || '').trim();
-    if (!model) continue;
-    if (!byModel.has(model)) byModel.set(model, []);
-    byModel.get(model).push(row);
+    if (model) {
+      if (!byModelRows.has(model)) byModelRows.set(model, []);
+      byModelRows.get(model).push(row);
+    }
   }
+
   return rows.map(item => {
     if (item?.source_type !== 'garment') return item;
-    const anchor = item.source_id ? anchorById.get(String(item.source_id)) : null;
-    const fallbackAnchor = !anchor ? resolvedAnchors.find(row =>
-      (item.ean && String(row.ean || '') === String(item.ean)) ||
-      (item.article_no && String(row.article || '') === String(item.article_no)) ||
-      (item.model && String(row.customer_model || '') === String(item.model)) ||
-      (item.model && String(row.model1 || '') === String(item.model))
-    ) : null;
-    const resolvedAnchor = anchor || fallbackAnchor;
-    if (!resolvedAnchor) return item;
-    const anchorRow = resolvedAnchor;
-    const model = String(anchorRow.customer_model || '').trim();
-    const modelRows = byModel.get(model) || [anchorRow];
+    const anchor = (item.source_id && byId.get(String(item.source_id)))
+      || (item.ean && byEan.get(String(item.ean).trim()))
+      || (item.article_no && byArticle.get(String(item.article_no).trim()))
+      || (item.model && byModel.get(String(item.model).trim()));
+    if (!anchor) return item;
+
+    const model = String(anchor.customer_model || '').trim();
+    const modelRows = byModelRows.get(model) || [anchor];
     const sizes = [...new Set(modelRows.map(row => String(row.size || '').trim()).filter(Boolean))].sort(garmentSizeSort);
-    const colors = [...new Set(modelRows.map(row => String(row.color || '').trim()).filter(Boolean))].sort((a,b) => a.localeCompare(b));
-    return { ...item, name: anchorRow.excel_name || item.name, model: anchorRow.customer_model || anchorRow.model_name || anchorRow.model1 || item.model, description: anchorRow.description || item.description, image_url: anchorRow.image_url || item.image_url, category: garmentCategoryFromSizes(sizes), garment_meta: { fabric: anchorRow.description || item.description || '', sizes, colors, category: garmentCategoryFromSizes(sizes), master_ean: anchorRow.master_ean || item.ean || '', master_article: anchorRow.master_article || item.article_no || '' } };
+    const colors = [...new Set(modelRows.map(row => String(row.color || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const category = garmentCategoryFromSizes(sizes);
+    return {
+      ...item,
+      name: anchor.excel_name || item.name,
+      model: anchor.customer_model || anchor.model_name || anchor.model1 || item.model,
+      description: anchor.description || item.description,
+      image_url: anchor.image_url || item.image_url,
+      category,
+      garment_meta: {
+        fabric: anchor.description || item.description || '',
+        sizes,
+        colors,
+        category,
+        master_ean: anchor.master_ean || item.ean || '',
+        master_article: anchor.master_article || item.article_no || ''
+      }
+    };
   });
 }
 

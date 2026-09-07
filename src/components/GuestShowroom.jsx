@@ -954,7 +954,14 @@ export default function GuestShowroom() {
 
   const categories = useMemo(() => {
     const values = [...new Set(items.map(x => String(x.category || '').trim()).filter(Boolean))];
-    return ['All', ...values].length > 1 ? ['All', ...values] : CATEGORY_FALLBACK;
+    const hasGarments = items.some(x => x?.source_type === 'garment');
+    const garmentSizes = ['Kids', 'Teens', 'Adult', 'Plus'];
+    const nonGarment = values.filter(value => !garmentSizes.includes(value) && value !== 'Garments');
+    // Keep Garments as an umbrella category while also exposing the four
+    // size-based garment collections as first-class filters.
+    const ordered = ['All', ...nonGarment];
+    if (hasGarments) ordered.push('Garments', ...garmentSizes.filter(size => values.includes(size)));
+    return [...new Set(ordered)];
   }, [items]);
 
   const filtered = useMemo(() => {
@@ -963,7 +970,11 @@ export default function GuestShowroom() {
       if (collectionMode === 'favourites' && !isFavourite(item)) return false;
       if (collectionMode === 'cart' && !inCart(item)) return false;
       if (collectionMode === 'featured' && !item.featured) return false;
-      if (category !== 'All' && String(item.category || '') !== category) return false;
+      if (category !== 'All') {
+        if (category === 'Garments') {
+          if (item?.source_type !== 'garment') return false;
+        } else if (String(item.category || '') !== category) return false;
+      }
       if (!q) return true;
       return [item.name, item.brand, item.model, item.category, item.ean, item.article_no].filter(Boolean).some(v => String(v).toLowerCase().includes(q));
     });
@@ -987,7 +998,18 @@ export default function GuestShowroom() {
   }
 
   function closeDetail() {
-    if (!popShowroomHistory('detail')) setSelected(null);
+    // Close the detail view immediately. Do not require a second Escape keypress
+    // to traverse the synthetic showroom history entry. Keep the browser route
+    // intact and simply remove the in-app overlay marker.
+    const stack = overlayHistoryRef.current;
+    const top = stack[stack.length - 1];
+    if (top === 'detail') stack.pop();
+    setSelected(null);
+    try {
+      const state = { ...(window.history.state || {}) };
+      delete state.showroomOverlay;
+      window.history.replaceState(state, '', window.location.href);
+    } catch {}
   }
 
   function openItemFromPopup(item) {
@@ -1135,20 +1157,11 @@ export default function GuestShowroom() {
           </section>
         )}
 
-        {items.filter(x => x.visible).length > 0 && (
-          <section className="showroom-home-section showroom-new-arrivals" aria-label="New arrivals">
-            <div className="showroom-block-heading showroom-home-section-heading"><div><span>JUST IN</span><h2>New arrivals</h2></div><div className="showroom-result-count">Latest additions</div></div>
-            <div className="showroom-mini-grid">
-              {items.filter(x => x.visible).slice().sort((a,b) => String(b.created_at || '').localeCompare(String(a.created_at || ''))).slice(0, 4).map(item => <ProductCard key={`new-${item.id}`} item={item} onOpen={openItem} isFavourite={isFavourite(item)} inCart={inCart(item)} onToggleFavourite={toggleFavourite} onToggleCart={toggleCart} />)}
-            </div>
-          </section>
-        )}
-
         {categories.filter(c => c !== 'All').length > 0 && (
           <section className="showroom-home-section showroom-category-showcase" aria-label="Shop by category">
             <div className="showroom-block-heading showroom-home-section-heading"><div><span>EXPLORE</span><h2>Shop by category</h2></div><div className="showroom-result-count">Choose a collection</div></div>
             <div className="showroom-category-tiles">
-              {categories.filter(c => c !== 'All').slice(0, 8).map(cat => {
+              {[...categories.filter(c => c !== 'All' && ['Garments','Kids','Teens','Adult','Plus'].includes(c)), ...categories.filter(c => c !== 'All' && !['Garments','Kids','Teens','Adult','Plus'].includes(c))].slice(0, 12).map(cat => {
                 const representative = items.find(x => x.visible && String(x.category || '') === String(cat) && getImage(x));
                 const count = items.filter(x => x.visible && String(x.category || '') === String(cat)).length;
                 return <button type="button" className="showroom-category-tile" key={cat} onClick={() => { setCollectionMode('all'); setSearch(''); setCategory(cat); requestAnimationFrame(() => document.getElementById('showroom-collection')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); }}>

@@ -40,7 +40,7 @@ function normalizeGarmentSize(value) {
     .replace(/\s+/g, '')
     .replace(/[–—]/g, '-')
     .replace(/\/(?!\d)/g, '-')
-    .replace(/(?:YRS?|YEARS?)$/, '')
+    .replace(/(?:Y|YRS?|YEARS?)$/, '')
     .replace(/\//g, '-');
 }
 

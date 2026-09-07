@@ -16,7 +16,7 @@ function normalizeGarmentSize(value) {
   return String(value ?? '').trim().toUpperCase()
     .replace(/\s+/g, '')
     .replace(/[–—]/g, '-')
-    .replace(/(?:YRS?|YEARS?)$/, '')
+    .replace(/(?:Y|YRS?|YEARS?)$/, '')
     .replace(/\//g, '-');
 }
 

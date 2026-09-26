@@ -1,13 +1,13 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { formatMonthLabel, normalizeMonthValue, monthSortKey, categoryIcon, garmentTypeIcon, uniqueSorted } from '../lib/helpers.js';
+import { useAuth } from '../lib/useAuth.js';
+import SapStock from './SapStock.jsx';
 
 function recentProducts(products) {
   return [...products].sort((a,b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).slice(0, 8);
 }
 
 function getGreeting() {
-  // Always use the browser's local clock. The app can stay open across
-  // a time boundary, so this is intentionally recalculated periodically.
   const hour = new Date().getHours();
   if (hour >= 5 && hour < 12) return 'Good morning';
   if (hour >= 12 && hour < 17) return 'Good afternoon';
@@ -15,12 +15,13 @@ function getGreeting() {
   return 'Good night';
 }
 
-
 export default function Home({ products, garments, onGoToCatalog, onGoToGarments }) {
+  const { isEmployee, permissions } = useAuth();
   const [catQuery, setCatQuery] = useState('');
   const [brandQuery, setBrandQuery] = useState('');
   const [animate, setAnimate] = useState(false);
   const [greeting, setGreeting] = useState(getGreeting);
+  const [showSapStock, setShowSapStock] = useState(false);
   useEffect(() => { const t = setTimeout(() => setAnimate(true), 30); return () => clearTimeout(t); }, [products, garments]);
   useEffect(() => {
     const updateGreeting = () => setGreeting(getGreeting());
@@ -47,11 +48,14 @@ export default function Home({ products, garments, onGoToCatalog, onGoToGarments
   }, [products]);
   const recent = useMemo(()=>recentProducts(products),[products]);
 
-
   const garmentBrands = uniqueSorted(garments || [], 'brand');
   const garmentStyles = uniqueSorted(garments || [], 'model_name');
   const garmentStyleCounts = useMemo(()=>Object.entries((garments||[]).reduce((a,g)=>(a[g.model_name]=(a[g.model_name]||0)+1,a),{})).sort((a,b)=>b[1]-a[1]),[garments]);
   const garmentBrandCounts = useMemo(()=>Object.entries((garments||[]).reduce((a,g)=>(a[g.brand]=(a[g.brand]||0)+1,a),{})).sort((a,b)=>b[1]-a[1]),[garments]);
+
+  if (showSapStock) {
+    return <SapStock onClose={() => setShowSapStock(false)} />;
+  }
 
   return (
     <div className="home-wrap">
@@ -64,6 +68,7 @@ export default function Home({ products, garments, onGoToCatalog, onGoToGarments
         <div className="hero-actions">
           <button className="btn btn-primary" onClick={()=>onGoToCatalog({})}>Browse Articles</button>
           <button className="btn btn-teal" onClick={()=>onGoToGarments({})}>Browse Garments</button>
+          {isEmployee && permissions?.canView && <button className="btn btn-secondary" onClick={()=>setShowSapStock(true)}>SAP Stock</button>}
         </div>
       </section>
 
@@ -75,19 +80,15 @@ export default function Home({ products, garments, onGoToCatalog, onGoToGarments
       </section>
 
       <section className="dashboard-grid two-equal">
-
         <div className="panel glass-panel recent-panel">
           <div className="panel-heading-row"><div><h3>Recently Added</h3><div className="panel-hint">Newest records first.</div></div><button className="text-button" onClick={()=>onGoToCatalog({})}>View all</button></div>
           <div className="recent-list">{recent.map(p=><button className="recent-row" key={p.id} onClick={()=>onGoToCatalog({search:p.ean||p.description,autoOpen:true})}><div className="recent-thumb">{p.image_url?<img src={p.image_url} alt=""/>:<span>IMG</span>}</div><div><strong>{p.description||p.model||'Unnamed article'}</strong><small>{p.brand||'—'} · {p.article_no||'No Article No.'}</small></div><b>{p.sp!=null?`₹${p.sp}`:p.mrp!=null?`₹${p.mrp}`:'—'}</b></button>)}</div>
         </div>
-
         <div className="panel glass-panel">
           <div className="panel-heading-row"><div><h3>Articles by Month</h3><div className="panel-hint">Latest production/import periods first.</div></div></div>
           <div className="rank-list">{monthCounts.slice(0,12).map(([m,count],i)=><button className="rank-row" key={m} onClick={()=>onGoToCatalog({month:m})}><span>{String(i+1).padStart(2,'0')}</span><strong>{formatMonthLabel(m)}</strong><i><em style={{width:`${animate?count/Math.max(...monthCounts.map(x=>x[1]),1)*100:0}%`}}/></i><b>{count}</b></button>)}</div>
         </div>
       </section>
-
-
 
       <section className="dashboard-grid two-equal">
         <div className="panel glass-panel"><div className="panel-heading-row"><div><h3>Categories</h3><div className="panel-hint">Search and open a category.</div></div></div><div className="smart-search"><span>⌕</span><input placeholder="Search categories…" value={catQuery} onChange={e=>setCatQuery(e.target.value)}/></div><div className="cat-tile-grid compact-tiles">{filteredCats.slice(0,18).map(([name,count])=><button className="cat-tile" key={name} onClick={()=>onGoToCatalog({category:name})}><div className="icon">{categoryIcon(name)}</div><div className="name">{name}</div><div className="count">{count}</div><div className="count-lbl">articles</div></button>)}</div></div>
@@ -95,11 +96,7 @@ export default function Home({ products, garments, onGoToCatalog, onGoToGarments
       </section>
 
       <div className="section-title-row"><div><h2>Garments</h2><p>Separate garment master with style and brand navigation.</p></div><button className="btn btn-teal" onClick={()=>onGoToGarments({})}>Open Garments</button></div>
-      {garments.length === 0 && (
-        <div className="home-data-status" role="status">
-          No garment records found.
-        </div>
-      )}
+      {garments.length === 0 && <div className="home-data-status" role="status">No garment records found.</div>}
       <section className="dashboard-metrics compact"><div className="metric-card"><strong>{garments.length}</strong><span>Rows</span></div><div className="metric-card"><strong>{garmentStyles.length}</strong><span>Styles</span></div><div className="metric-card"><strong>{garmentBrands.length}</strong><span>Brands</span></div></section>
       <section className="dashboard-grid two-equal"><div className="panel glass-panel"><h3>Top Garment Styles</h3><div className="cat-tile-grid compact-tiles">{garmentStyleCounts.slice(0,12).map(([name,count])=><button className="cat-tile" key={name} onClick={()=>onGoToGarments({modelName:name})}><div className="icon">{garmentTypeIcon(name)}</div><div className="name">{name||'Unspecified'}</div><div className="count">{count}</div><div className="count-lbl">rows</div></button>)}</div></div><div className="panel glass-panel"><h3>Garment Brands</h3><div className="rank-list">{garmentBrandCounts.slice(0,12).map(([b,count],i)=><button className="rank-row" key={b} onClick={()=>onGoToGarments({brand:b})}><span>{String(i+1).padStart(2,'0')}</span><strong>{b}</strong><i><em style={{width:`${count/Math.max(garmentBrandCounts[0]?.[1]||1,1)*100}%`}}/></i><b>{count}</b></button>)}</div></div></section>
     </div>

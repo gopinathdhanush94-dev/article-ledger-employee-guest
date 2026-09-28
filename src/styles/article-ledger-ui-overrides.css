@@ -1,0 +1,232 @@
+/* =========================================================
+   Article Ledger — final stock/detail/navigation UX overrides
+   ========================================================= */
+
+/* ---------- Product detail: keep SAP stock visible and actions compact ---------- */
+@media (min-width: 761px) {
+  .product-overlay .pd-main {
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .product-overlay .pd-content {
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding-right: 4px !important;
+    scrollbar-width: thin !important;
+    scrollbar-color: rgba(100,116,139,.35) transparent !important;
+  }
+
+  .product-overlay .pd-actions {
+    display: grid !important;
+    grid-template-columns: repeat(4, max-content) !important;
+    justify-content: flex-start !important;
+    align-items: center !important;
+    gap: 8px !important;
+    flex-wrap: nowrap !important;
+    min-height: 42px !important;
+    padding: 7px 0 0 !important;
+    margin-top: 6px !important;
+  }
+
+  .product-overlay .pd-actions .btn {
+    min-height: 40px !important;
+    padding: 8px 13px !important;
+    font-size: 12px !important;
+    white-space: nowrap !important;
+  }
+
+  .product-overlay .pd-stock-section {
+    margin-top: 9px !important;
+    padding-top: 10px !important;
+  }
+
+  .product-overlay .pd-stock-section > div:not(.pd-section-heading) > div {
+    padding: 10px !important;
+  }
+
+  .product-overlay .pd-stock-section > div:not(.pd-section-heading) > div > div:last-child > div {
+    padding: 6px 8px !important;
+  }
+}
+
+/* ---------- Navigation: SAP Stock is the final employee tab ---------- */
+@media (min-width: 761px) {
+  nav.tabs button:nth-child(1) { order: 1; }
+  nav.tabs button:nth-child(2) { order: 2; }
+  nav.tabs button:nth-child(4) { order: 3; }
+  nav.tabs button:nth-child(5) { order: 4; }
+  nav.tabs button:nth-child(6) { order: 5; }
+  nav.tabs button:nth-child(7) { order: 6; }
+  nav.tabs button:nth-child(3) { order: 99; }
+}
+
+/* The retired AI Image Studio should no longer occupy the navigation. */
+nav.tabs .ai-studio-tab { display: none !important; }
+
+/* ---------- SAP stock workspace: cleaner, denser, professional table ---------- */
+.sap-stock-screen {
+  max-width: 1500px !important;
+  padding: 24px 28px 56px !important;
+}
+
+.sap-stock-header {
+  margin-bottom: 16px !important;
+  padding: 2px 2px 0 !important;
+}
+
+.sap-stock-title-row h2 {
+  font-size: 28px !important;
+}
+
+.sap-stock-title-row p {
+  margin-top: 6px !important;
+}
+
+.sap-stock-scope-badge {
+  height: 24px !important;
+  font-size: 9px !important;
+}
+
+.sap-stock-actions {
+  gap: 8px !important;
+}
+
+.sap-stock-sync {
+  font-size: 10px !important;
+}
+
+.sap-stock-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  margin-bottom: 14px !important;
+}
+
+.sap-stock-metric {
+  min-height: 96px !important;
+  padding: 15px 17px !important;
+  border-radius: 12px !important;
+}
+
+.sap-stock-metric strong {
+  font-size: 24px !important;
+}
+
+.sap-stock-metric small {
+  font-size: 10px !important;
+}
+
+.sap-stock-panel {
+  border-radius: 13px !important;
+}
+
+.sap-stock-panel-head {
+  padding: 16px 18px 12px !important;
+}
+
+.sap-stock-panel-head h3 {
+  font-size: 16px !important;
+}
+
+.sap-stock-toolbar {
+  padding: 0 18px 10px !important;
+}
+
+.sap-stock-search {
+  height: 40px !important;
+}
+
+.sap-stock-location-filter select {
+  height: 40px !important;
+}
+
+.sap-stock-table-note {
+  min-height: 32px !important;
+  padding: 0 18px !important;
+  font-size: 10px !important;
+}
+
+.sap-stock-table {
+  min-width: 980px !important;
+  font-size: 11.5px !important;
+}
+
+.sap-stock-table th {
+  padding: 10px 11px !important;
+  background: #f5f7fa !important;
+  color: #526174 !important;
+  font-size: 9px !important;
+}
+
+.sap-stock-table td {
+  padding: 9px 11px !important;
+  border-bottom: 1px solid #edf1f5 !important;
+}
+
+.sap-stock-table tbody tr:nth-child(even) td {
+  background: #fcfdff;
+}
+
+.sap-stock-table tbody tr:hover td {
+  background: #f6fafb !important;
+}
+
+.sap-stock-table .sap-col-ean { width: 145px !important; }
+.sap-stock-table .sap-col-material { width: 120px !important; }
+.sap-stock-table .sap-col-item { width: 360px !important; }
+.sap-stock-table .sap-col-location { width: 100px !important; }
+.sap-stock-table .sap-col-total { width: 105px !important; }
+.sap-stock-table .sap-col-value { width: 140px !important; }
+
+.sap-stock-table th.sap-col-location {
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  text-align: right !important;
+}
+
+.sap-stock-table td.sap-col-material strong,
+.sap-ean-cell span,
+.sap-number-cell {
+  font-size: 10.5px !important;
+}
+
+.sap-stock-table td.sap-col-item {
+  color: #334155 !important;
+}
+
+.sap-stock-table .sap-col-total,
+.sap-stock-table .sap-col-value {
+  background: #f8fafc !important;
+  border-left: 1px solid #edf1f5 !important;
+}
+
+.sap-stock-table th.sap-col-total,
+.sap-stock-table th.sap-col-value {
+  background: #eef2f6 !important;
+}
+
+.sap-stock-empty {
+  min-height: 220px !important;
+}
+
+/* Keep the stock screen usable on narrower desktop windows. */
+@media (max-width: 1180px) and (min-width: 721px) {
+  .sap-stock-screen { padding-left: 18px !important; padding-right: 18px !important; }
+  .sap-stock-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .sap-stock-header { align-items: flex-start !important; flex-direction: column !important; }
+  .sap-stock-actions { width: 100%; justify-content: flex-start !important; }
+}
+
+@media (max-width: 720px) {
+  .sap-stock-screen { padding: 18px 12px 44px !important; }
+  .sap-stock-metrics { grid-template-columns: 1fr 1fr !important; }
+  .sap-stock-metric { min-height: 92px !important; padding: 13px !important; }
+  .sap-stock-metric strong { font-size: 20px !important; }
+
+  .product-overlay .pd-actions {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 7px !important;
+  }
+}

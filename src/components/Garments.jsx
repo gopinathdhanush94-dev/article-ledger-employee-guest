@@ -70,10 +70,13 @@ function groupGarments(rows) {
         source_file: r.source_file,
         year: extractYear(r.source_file) || extractYear(r.moi) || extractYear(r.mfd),
         sizes: [],
+        created_at_ms: r.created_at ? new Date(r.created_at).getTime() : 0,
       });
     }
     const g = map.get(key);
     if (!g.image_url && r.image_url) g.image_url = r.image_url;
+    const rowCreatedAt = r.created_at ? new Date(r.created_at).getTime() : 0;
+    if (rowCreatedAt > (g.created_at_ms || 0)) g.created_at_ms = rowCreatedAt;
     g.sizes.push(r);
   }
   return [...map.values()];
@@ -102,7 +105,13 @@ export default function Garments({ garments, initialFilters, onEdit, onDelete })
     }
   }, [initialFilters]);
 
-  const grouped = useMemo(() => groupGarments(garments), [garments]);
+  const grouped = useMemo(() => (
+    groupGarments(garments).sort((a, b) => {
+      const createdDiff = (b.created_at_ms || 0) - (a.created_at_ms || 0);
+      if (createdDiff !== 0) return createdDiff;
+      return String(a.excel_name || a.model_name || '').localeCompare(String(b.excel_name || b.model_name || ''));
+    })
+  ), [garments]);
 
   // Every garment filter is dependent on the other active filters.
   // Year is derived from the garment source/import year (for example

@@ -138,16 +138,15 @@ export default function Catalog({ products, initialFilters, onEdit, onDuplicate,
         return true;
       })
       .sort((a, b) => {
-        // Newest manufacturing/import month first. For products in the same
-        // month, use created_at so newly added articles appear first.
-        const dateDiff = getDateKey(b) - getDateKey(a);
-        if (dateDiff !== 0) return dateDiff;
-
+        // Recently added articles always appear first. Manufacturing/import
+        // month remains the fallback for legacy rows without created_at.
         const createdA = a.created_at ? new Date(a.created_at).getTime() : 0;
         const createdB = b.created_at ? new Date(b.created_at).getTime() : 0;
         if (createdB !== createdA) return createdB - createdA;
 
-        // Stable final tie-breaker so the order doesn't appear random.
+        const dateDiff = getDateKey(b) - getDateKey(a);
+        if (dateDiff !== 0) return dateDiff;
+
         return String(a.description || a.model || a.ean || '').localeCompare(
           String(b.description || b.model || b.ean || '')
         );

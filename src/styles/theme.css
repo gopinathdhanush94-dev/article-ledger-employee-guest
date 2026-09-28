@@ -1597,7 +1597,6 @@ main,.home-wrap,.form-wrap,.controls,.header-inner,nav.tabs{width:100%;min-width
 /* =========================================================
    Gemini Product Image Studio
    ========================================================= */
-.ai-studio-tab {
   border-color: rgba(228, 87, 46, 0.28) !important;
   background: linear-gradient(180deg, rgba(228,87,46,.10), rgba(228,87,46,.04));
 }

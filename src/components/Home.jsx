@@ -68,7 +68,7 @@ export default function Home({ products, garments, onGoToCatalog, onGoToGarments
         <div className="hero-actions">
           <button className="btn btn-primary" onClick={()=>onGoToCatalog({})}>Browse Articles</button>
           <button className="btn btn-teal" onClick={()=>onGoToGarments({})}>Browse Garments</button>
-          {isEmployee && permissions?.canView && <button className="btn btn-secondary" onClick={()=>setShowSapStock(true)}>SAP Stock</button>}
+          {isEmployee && permissions?.canViewStock && <button className="btn btn-secondary" onClick={()=>setShowSapStock(true)}>SAP Stock</button>}
         </div>
       </section>
 

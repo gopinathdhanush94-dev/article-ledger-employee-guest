@@ -16,6 +16,7 @@ import UserManagement from './components/UserManagement.jsx';
 import ShowroomManager from './components/ShowroomManager.jsx';
 import ShowroomOrders from './components/ShowroomOrders.jsx';
 import AccessGate from './components/AccessGate.jsx';
+import SapStock from './components/SapStock.jsx';
 import { readDataset, writeDataset } from './lib/dataCache.js';
 
 const BrandIconSVG = () => (
@@ -93,7 +94,7 @@ function AppInner() {
     // example after a browser/tab restore). The hash is our durable route
     // bookmark, while sessionStorage also protects against a history entry
     // that has been recreated by the browser.
-    const validViews = new Set(['home', 'catalog', 'garments', 'add-product', 'add-garment', 'showroom', 'showroom-orders']);
+    const validViews = new Set(['home', 'catalog', 'garments', 'add-product', 'add-garment', 'showroom', 'showroom-orders', 'stock']);
     const hashView = String(window.location.hash || '').replace(/^#/, '');
     let savedView = '';
     try { savedView = sessionStorage.getItem('article-ledger:view') || ''; } catch {}
@@ -401,6 +402,7 @@ function AppInner() {
     'add-garment': permissions.canViewAddProduct,
     showroom: permissions.canViewShowroom,
     'showroom-orders': permissions.canManageQuotations,
+    stock: permissions.canViewStock,
     };
 
   useEffect(() => {
@@ -458,6 +460,7 @@ function AppInner() {
         <nav className="tabs">
           {permissions.canView && <button className={view === 'home' ? 'active' : ''} onClick={goHome}>🏠 Home</button>}
           {permissions.canViewGeneral && <button className={view === 'catalog' ? 'active' : ''} onClick={() => { setCatalogFilters(null); navigate('catalog'); }}>General</button>}
+          {permissions.canViewStock && <button className={view === 'stock' ? 'active' : ''} onClick={() => navigate('stock')}>SAP Stock</button>}
           {permissions.canViewGarments && <button className={view === 'garments' ? 'active' : ''} onClick={() => { setGarmentFilters(null); navigate('garments'); }}>Garments</button>}
           {permissions.canViewAddProduct && <button className={(view === 'add-product' || view === 'add-garment') ? 'active' : ''} onClick={openAddChoice}>+ Add Product</button>}
           {permissions.canViewShowroom && <button className={view === 'showroom' ? 'active' : ''} onClick={() => navigate('showroom')}>Showroom</button>}
@@ -505,6 +508,7 @@ function AppInner() {
               active={view === 'catalog'}
               canEdit={permissions.canEdit}
               canDelete={permissions.canDelete}
+              canViewStock={permissions.canViewStock}
             />
           </div>
           <div style={{ display: view === 'add-product' ? 'block' : 'none' }}>
@@ -515,6 +519,9 @@ function AppInner() {
               onSaved={handleProductSaved}
               onCancel={() => { setEditingProduct(null); navigate('catalog'); }}
             />
+          </div>
+          <div style={{ display: view === 'stock' ? 'block' : 'none' }}>
+            <SapStock />
           </div>
           <div style={{ display: view === 'garments' ? 'block' : 'none' }}>
             {garmentsLoading && !garmentsHasLoadedOnce && (

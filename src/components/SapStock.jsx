@@ -35,7 +35,7 @@ export default function SapStock({ onClose }) {
     setRefreshing(false);
   };
 
-  useEffect(() => { if (isEmployee && permissions?.canView) void loadStock(); }, [isEmployee, permissions?.canView]);
+  useEffect(() => { if (isEmployee && permissions?.canViewStock) void loadStock(); }, [isEmployee, permissions?.canViewStock]);
 
   const locations = useMemo(() => {
     const set = new Set();
@@ -84,7 +84,7 @@ export default function SapStock({ onClose }) {
     return new Date(Math.max(...dates));
   }, [rows]);
 
-  if (!isEmployee || !permissions?.canView) return null;
+  if (!isEmployee || !permissions?.canViewStock) return null;
 
   return (
     <div className="sap-stock-screen">

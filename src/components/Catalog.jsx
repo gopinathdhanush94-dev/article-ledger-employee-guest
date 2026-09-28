@@ -7,7 +7,7 @@ import ScannerModal from './ScannerModal.jsx';
 import { useHideOnScroll } from '../lib/useHideOnScroll.js';
 import CatalogueExport from './CatalogueExport.jsx';
 
-export default function Catalog({ products, initialFilters, onEdit, onDuplicate, onDelete, isAuthed, lookupCode, active = true }) {
+export default function Catalog({ products, initialFilters, onEdit, onDuplicate, onDelete, isAuthed, lookupCode, active = true, canViewStock = false }) {
   const savedState = (() => {
     try { return JSON.parse(sessionStorage.getItem('article-ledger:catalog-state') || '{}'); } catch { return {}; }
   })();
@@ -300,6 +300,7 @@ export default function Catalog({ products, initialFilters, onEdit, onDuplicate,
         <ProductModal
           product={selected}
           isAuthed={isAuthed}
+          canViewStock={canViewStock}
           onClose={() => setSelected(null)}
           onEdit={() => { const p = selected; setSelected(null); onEdit(p); }}
           onDuplicate={() => { const p = selected; setSelected(null); onDuplicate(p); }}

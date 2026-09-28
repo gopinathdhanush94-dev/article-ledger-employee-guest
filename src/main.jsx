@@ -5,6 +5,7 @@ import './styles/theme.css';
 import '../theme-access-gate.css';
 import './styles/showroom.css';
 import './styles/sap-stock.css';
+import './styles/article-ledger-ui-overrides.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

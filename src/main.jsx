@@ -4,6 +4,7 @@ import App from './App.jsx';
 import './styles/theme.css';
 import '../theme-access-gate.css';
 import './styles/showroom.css';
+import './styles/sap-stock.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

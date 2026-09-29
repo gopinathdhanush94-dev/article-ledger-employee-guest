@@ -15,7 +15,6 @@ import UserManagement from './components/UserManagement.jsx';
 import ShowroomManager from './components/ShowroomManager.jsx';
 import ShowroomOrders from './components/ShowroomOrders.jsx';
 import AccessGate from './components/AccessGate.jsx';
-import SapStock from './components/SapStock.jsx';
 import { readDataset, writeDataset } from './lib/dataCache.js';
 
 const BrandIconSVG = () => (
@@ -88,11 +87,7 @@ function AppInner() {
   // ---------------- browser back/forward + reload/tab restore ----------------
   const isPopRef = useRef(false);
   useEffect(() => {
-    // Never overwrite an existing route when AppInner mounts again (for
-    // example after a browser/tab restore). The hash is our durable route
-    // bookmark, while sessionStorage also protects against a history entry
-    // that has been recreated by the browser.
-    const validViews = new Set(['home', 'catalog', 'garments', 'add-product', 'add-garment', 'showroom', 'showroom-orders', 'stock']);
+    const validViews = new Set(['home', 'catalog', 'garments', 'add-product', 'add-garment', 'showroom', 'showroom-orders']);
     const hashView = String(window.location.hash || '').replace(/^#/, '');
     let savedView = '';
     try { savedView = sessionStorage.getItem('article-ledger:view') || ''; } catch {}
@@ -129,9 +124,6 @@ function AppInner() {
   }
 
   // ---------------- data loading ----------------
-  // Supabase/PostgREST caps a single select() response at 1000 rows by default,
-  // regardless of how many rows actually exist — so anything past the first
-  // 1000 silently gets cut off unless we page through with .range().
   async function fetchAllRows(table) {
     const pageSize = 1000;
     let all = [];
@@ -167,9 +159,6 @@ function AppInner() {
   const loadGarments = useCallback(async ({ background = false } = {}) => {
     if (!background) setGarmentsLoading(true);
     try {
-      // Load garments independently of the General article list.
-      // Avoid ordering by created_at here because some existing garment
-      // tables may have been created by an older schema.
       const pageSize = 1000;
       let all = [];
       let from = 0;
@@ -210,8 +199,6 @@ function AppInner() {
         setGarmentsHasLoadedOnce(true);
         setGarmentsLoading(false);
       }
-      // Revalidate in the background. Products are prioritized because they
-      // power the first employee screen; garments can arrive just after.
       void loadProducts({ background: true });
       window.setTimeout(() => { if (!cancelled) void loadGarments({ background: true }); }, 180);
     })();
@@ -233,10 +220,6 @@ function AppInner() {
     return err;
   }
 
-  // QR labels are designed to work from both Guest and Employee access.
-  // The Employee scanner first checks the already-loaded catalogue, then uses
-  // exact server-side lookups so an article outside the current UI filter is
-  // still found.
   const lookupEmployeeCode = useCallback(async (raw) => {
     const value = String(raw || '').trim();
     if (!value) return null;
@@ -263,8 +246,6 @@ function AppInner() {
         if (data?.[0]) return data[0];
       }
 
-      // If the QR was generated from a showroom item, resolve its source
-      // product without requiring the employee to change tabs or filters.
       for (const field of ['ean', 'article_no', 'model']) {
         const { data: showroomRows, error: showroomError } = await supabase
           .from('showroom_items')
@@ -283,7 +264,6 @@ function AppInner() {
     return null;
   }, []);
 
-  // ---------------- navigation actions ----------------
   function goHome() { navigate('home'); }
 
   function goToCatalog(filters) {
@@ -318,9 +298,6 @@ function AppInner() {
   function duplicateProduct(product) {
     if (!permissions.canAdd) return showToast('Your account does not have permission to add articles', 'error');
     requireAuth(() => {
-      // Clone the complete article so the user only needs to change the
-      // values that differ (commonly colour/model/EAN/article number).
-      // Never carry over the database id or EAN: EAN is the unique identity.
       const copy = { ...product, id: null, ean: '', custom: true };
       setEditingProduct(copy);
       navigate('add-product');
@@ -400,8 +377,7 @@ function AppInner() {
     'add-garment': permissions.canViewAddProduct,
     showroom: permissions.canViewShowroom,
     'showroom-orders': permissions.canManageQuotations,
-    stock: permissions.canViewStock,
-    };
+  };
 
   useEffect(() => {
     if (viewAllowed[view] === false) navigate('home');
@@ -462,7 +438,6 @@ function AppInner() {
           {permissions.canViewAddProduct && <button className={(view === 'add-product' || view === 'add-garment') ? 'active' : ''} onClick={openAddChoice}>+ Add Product</button>}
           {permissions.canViewShowroom && <button className={view === 'showroom' ? 'active' : ''} onClick={() => navigate('showroom')}>Showroom</button>}
           {permissions.canManageQuotations && <button className={view === 'showroom-orders' ? 'active' : ''} onClick={() => navigate('showroom-orders')}>Quotation Requests</button>}
-          {permissions.canViewStock && <button className={view === 'stock' ? 'active' : ''} onClick={() => navigate('stock')}>SAP Stock</button>}
         </nav>
       </header>
 
@@ -505,7 +480,6 @@ function AppInner() {
               active={view === 'catalog'}
               canEdit={permissions.canEdit}
               canDelete={permissions.canDelete}
-              canViewStock={permissions.canViewStock}
             />
           </div>
           <div style={{ display: view === 'add-product' ? 'block' : 'none' }}>
@@ -516,9 +490,6 @@ function AppInner() {
               onSaved={handleProductSaved}
               onCancel={() => { setEditingProduct(null); navigate('catalog'); }}
             />
-          </div>
-          <div style={{ display: view === 'stock' ? 'block' : 'none' }}>
-            <SapStock />
           </div>
           <div style={{ display: view === 'garments' ? 'block' : 'none' }}>
             {garmentsLoading && !garmentsHasLoadedOnce && (

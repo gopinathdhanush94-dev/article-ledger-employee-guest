@@ -20,3 +20,4 @@ This is the first-stage UI/authentication gate only. Before exposing guest showr
 
 ## Quotation email policy
 Quotation requests are handled entirely inside the webapp. No automatic quotation email is sent. Employees download the final quotation PDF from Employee Access and share it manually.
+

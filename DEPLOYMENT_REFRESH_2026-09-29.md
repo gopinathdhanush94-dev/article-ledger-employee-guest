@@ -1,0 +1,1 @@
+Production deployment refresh marker. Navigation in src/App.jsx is intentionally ordered: Home, General, Garments, + Add Product, Showroom, Quotation Requests.

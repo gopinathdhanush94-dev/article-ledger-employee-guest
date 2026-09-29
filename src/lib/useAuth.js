@@ -4,43 +4,43 @@ import { supabase } from '../supabaseClient.js';
 const ROLE_PERMISSIONS = {
   super_admin: {
     canView: true, canViewGeneral: true, canViewGarments: true, canViewAddProduct: true,
-    canAdd: true, canEdit: true, canDelete: true, canHistory: true, canViewStock: true,
+    canAdd: true, canEdit: true, canDelete: true, canHistory: true,
     canViewShowroom: true, canManageShowroom: true,
     canDataQuality: true, canManageUsers: true, canManageQuotations: true,
   },
   admin: {
     canView: true, canViewGeneral: true, canViewGarments: true, canViewAddProduct: true,
-    canAdd: true, canEdit: true, canDelete: true, canHistory: true, canViewStock: true,
+    canAdd: true, canEdit: true, canDelete: true, canHistory: true,
     canViewShowroom: true, canManageShowroom: true,
     canDataQuality: true, canManageUsers: true, canManageQuotations: true,
   },
   quotation_manager: {
     canView: true, canViewGeneral: true, canViewGarments: true, canViewAddProduct: true,
-    canAdd: false, canEdit: false, canDelete: false, canHistory: true, canViewStock: true,
+    canAdd: false, canEdit: false, canDelete: false, canHistory: true,
     canViewShowroom: true, canManageShowroom: true,
     canDataQuality: false, canManageUsers: false, canManageQuotations: true,
   },
   guest_manager: {
     canView: true, canViewGeneral: true, canViewGarments: true, canViewAddProduct: true,
-    canAdd: false, canEdit: false, canDelete: false, canHistory: true, canViewStock: true,
+    canAdd: false, canEdit: false, canDelete: false, canHistory: true,
     canViewShowroom: true, canManageShowroom: true,
     canDataQuality: false, canManageUsers: false, canManageQuotations: false,
   },
   editor: {
     canView: true, canViewGeneral: true, canViewGarments: true, canViewAddProduct: true,
-    canAdd: true, canEdit: true, canDelete: false, canHistory: true, canViewStock: true,
+    canAdd: true, canEdit: true, canDelete: false, canHistory: true,
     canViewShowroom: false, canManageShowroom: false,
     canDataQuality: false, canManageUsers: false, canManageQuotations: false,
   },
   viewer: {
     canView: true, canViewGeneral: true, canViewGarments: true, canViewAddProduct: false,
-    canAdd: false, canEdit: false, canDelete: false, canHistory: true, canViewStock: true,
+    canAdd: false, canEdit: false, canDelete: false, canHistory: true,
     canViewShowroom: false, canManageShowroom: false,
     canDataQuality: false, canManageUsers: false, canManageQuotations: false,
   },
   guest: {
     canView: false, canViewGeneral: false, canViewGarments: false, canViewAddProduct: false,
-    canAdd: false, canEdit: false, canDelete: false, canHistory: false, canViewStock: false,
+    canAdd: false, canEdit: false, canDelete: false, canHistory: false,
     canViewShowroom: false, canManageShowroom: false,
     canDataQuality: false, canManageUsers: false, canManageQuotations: false,
   },
@@ -112,8 +112,6 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    // A token refresh or duplicate SIGNED_IN for the already-mounted user must
-    // never block/unmount the application. The existing profile remains valid.
     if (sameUser && !forceProfileReload) {
       return;
     }
@@ -125,8 +123,6 @@ export function AuthProvider({ children }) {
     mountedRef.current = true;
     let cancelled = false;
 
-    // Subscribe once for the whole application. AccessGate and AppInner both
-    // consume the same context instead of creating independent auth listeners.
     const { data: authSubscription } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (cancelled || !mountedRef.current) return;
 
@@ -134,25 +130,17 @@ export function AuthProvider({ children }) {
       const sameUser = !!nextUserId && nextUserId === sessionUserIdRef.current;
 
       if (event === 'TOKEN_REFRESHED' || (event === 'SIGNED_IN' && sameUser)) {
-        // Keep the current React tree mounted. Supabase has refreshed or
-        // re-announced the same authenticated session; there is no access-gate
-        // transition to perform.
         setSession(nextSession || null);
         sessionUserIdRef.current = nextUserId;
         return;
       }
 
-      // INITIAL_SESSION and a genuine SIGNED_IN/user change may need profile
-      // hydration. Only these transitions are allowed to block the gate.
       void applySession(nextSession, {
         forceProfileReload: event === 'SIGNED_IN',
         blockUi: true,
       });
     });
 
-    // getSession is the authoritative initial snapshot. It may race with the
-    // INITIAL_SESSION event above, so applySession treats the same user as an
-    // already-known session and avoids duplicate UI transitions.
     let bootstrapTimedOut = false;
     const bootstrapTimeout = window.setTimeout(() => {
       if (cancelled || !mountedRef.current) return;
@@ -185,8 +173,6 @@ export function AuthProvider({ children }) {
       .finally(() => {
         window.clearTimeout(bootstrapTimeout);
         if (!bootstrapTimedOut && !cancelled && mountedRef.current) {
-          // A guest/no-session bootstrap should always release the access gate.
-          // Authenticated users remain gated only while their profile is loading.
           setLoading(current => current && !sessionUserIdRef.current ? false : current);
         }
       });

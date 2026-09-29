@@ -78,20 +78,14 @@ function CartonSection({ type, tone, qty, mrp, unitMrp, dimensions, weight }) {
   );
 }
 
-export default function ProductModal({ product: p, isAuthed, canViewStock = false, onClose, onEdit, onDuplicate, onDelete, onPrev, onNext }) {
+export default function ProductModal({ product: p, isAuthed, onClose, onEdit, onDuplicate, onDelete, onPrev, onNext }) {
   const off = discountPct(p.mrp, p.sp);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showImageViewer, setShowImageViewer] = useState(false);
-  const [stockRows, setStockRows] = useState([]);
-  const [stockLoading, setStockLoading] = useState(false);
-  const [stockError, setStockError] = useState(null);
 
-  // Lock the catalogue while the modal is open without disabling touch scrolling
-  // on the modal itself. Android works best with overflow locking only; iOS
-  // additionally gets the fixed-body technique to prevent Safari background drift.
   useEffect(() => {
     const body = document.body;
     const html = document.documentElement;
@@ -143,21 +137,6 @@ export default function ProductModal({ product: p, isAuthed, canViewStock = fals
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [showImageViewer]);
-
-  useEffect(() => {
-    if (!canViewStock || !p?.ean) { setStockRows([]); setStockLoading(false); setStockError(null); return; }
-    let cancelled = false;
-    setStockLoading(true);
-    setStockError(null);
-    supabase.from('article_stock_summary').select('ean,sap_material_code,item_name,total_quantity,total_stock_value,locations,last_synced_at').eq('ean', String(p.ean).trim()).order('sap_material_code', { ascending: true })
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) { setStockError(error.message); setStockRows([]); }
-        else setStockRows(data || []);
-        setStockLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [p?.ean, canViewStock]);
 
   useEffect(() => {
     if (!isAuthed || !p?.id) { setHistory([]); return; }
@@ -254,45 +233,6 @@ export default function ProductModal({ product: p, isAuthed, canViewStock = fals
                     weight={wt(p.inner_nw, p.inner_gw, p.inner_wt_unit)}
                   />
                 </section>
-
-                {canViewStock && (
-                  <section className="pd-section pd-stock-section">
-                    <div className="pd-section-heading">
-                      <h3>SAP STOCK</h3>
-                      <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Live snapshot mapped by EAN</span>
-                    </div>
-                    {stockLoading ? (
-                      <div className="quality-empty">Loading stock…</div>
-                    ) : stockError ? (
-                      <div className="inline-notice danger">Could not load stock: {stockError}</div>
-                    ) : stockRows.length === 0 ? (
-                      <div className="quality-empty">No SAP stock is currently mapped to this EAN.</div>
-                    ) : (
-                      <div style={{ display: 'grid', gap: 10 }}>
-                        {stockRows.map((row) => (
-                          <div key={row.sap_material_code || row.ean} style={{ border: '1px solid var(--line, #ddd)', borderRadius: 12, padding: 12, background: 'rgba(255,255,255,0.45)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 9 }}>
-                              <div><strong>{row.sap_material_code || 'SAP material —'}</strong><div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 3 }}>{row.item_name || 'SAP item'}</div></div>
-                              <div style={{ display: 'flex', gap: 16, fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>
-                                <span><b>{Number(row.total_quantity || 0).toLocaleString('en-IN', { maximumFractionDigits: 3 })}</b> Qty</span>
-                                <span><b>₹{Number(row.total_stock_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b></span>
-                              </div>
-                            </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 7 }}>
-                              {(Array.isArray(row.locations) ? row.locations : []).map((loc, index) => (
-                                <div key={loc.location || index} style={{ border: '1px solid var(--line, #ddd)', borderRadius: 8, padding: '7px 9px' }}>
-                                  <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--ink-soft)' }}>{loc.location || 'Unspecified'}</div>
-                                  <strong>{Number(loc.quantity || 0).toLocaleString('en-IN', { maximumFractionDigits: 3 })}</strong>
-                                  <div style={{ fontSize: 10, color: 'var(--ink-soft)' }}>₹{Number(loc.stock_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </section>
-                )}
 
                 <section className="pd-section pd-sku-section">
                   <h3>SKU / UNIT DETAILS</h3>

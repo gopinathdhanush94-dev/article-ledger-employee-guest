@@ -7,7 +7,7 @@ import ScannerModal from './ScannerModal.jsx';
 import { useHideOnScroll } from '../lib/useHideOnScroll.js';
 import CatalogueExport from './CatalogueExport.jsx';
 
-export default function Catalog({ products, initialFilters, onEdit, onDuplicate, onDelete, isAuthed, lookupCode, active = true, canViewStock = false }) {
+export default function Catalog({ products, initialFilters, onEdit, onDuplicate, onDelete, isAuthed, lookupCode, active = true }) {
   const savedState = (() => {
     try { return JSON.parse(sessionStorage.getItem('article-ledger:catalog-state') || '{}'); } catch { return {}; }
   })();
@@ -36,9 +36,6 @@ export default function Catalog({ products, initialFilters, onEdit, onDuplicate,
 
   useEffect(() => {
     try {
-      // Keep filter state across navigation, but never persist an open
-      // product modal. Persisting selectedId could reopen the last article
-      // after a reload and leave the modal over other screens.
       sessionStorage.setItem('article-ledger:catalog-state', JSON.stringify({
         q, cat, brand, month, year,
       }));
@@ -54,10 +51,6 @@ export default function Catalog({ products, initialFilters, onEdit, onDuplicate,
     }
   }, [active]);
 
-
-  // Each filter's dropdown is calculated from the other active filters.
-  // This keeps the choices mutually consistent instead of showing the full
-  // database when a year/month/brand/category has already been selected.
   const rowsForFilter = (exclude) => products.filter(p => {
     if (exclude !== 'category' && cat && p.category !== cat) return false;
     if (exclude !== 'brand' && brand && p.brand !== brand) return false;
@@ -71,23 +64,21 @@ export default function Catalog({ products, initialFilters, onEdit, onDuplicate,
   const months = monthOptions(rowsForFilter('month'));
   const years = yearOptions(rowsForFilter('year'));
 
-  // If a newly selected filter makes another existing selection impossible,
-  // clear only that now-invalid selection. The dropdowns then recalculate.
   useEffect(() => {
     if (cat && !categories.includes(cat)) setCat('');
-  }, [cat, categories.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cat, categories.join('|')]);
 
   useEffect(() => {
     if (brand && !brands.includes(brand)) setBrand('');
-  }, [brand, brands.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [brand, brands.join('|')]);
 
   useEffect(() => {
     if (month && !months.includes(month)) setMonth('');
-  }, [month, months.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [month, months.join('|')]);
 
   useEffect(() => {
     if (year && !years.includes(year)) setYear('');
-  }, [year, years.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [year, years.join('|')]);
 
   const searchSuggestions = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -138,8 +129,6 @@ export default function Catalog({ products, initialFilters, onEdit, onDuplicate,
         return true;
       })
       .sort((a, b) => {
-        // Recently added articles always appear first. Manufacturing/import
-        // month remains the fallback for legacy rows without created_at.
         const createdA = a.created_at ? new Date(a.created_at).getTime() : 0;
         const createdB = b.created_at ? new Date(b.created_at).getTime() : 0;
         if (createdB !== createdA) return createdB - createdA;
@@ -299,7 +288,6 @@ export default function Catalog({ products, initialFilters, onEdit, onDuplicate,
         <ProductModal
           product={selected}
           isAuthed={isAuthed}
-          canViewStock={canViewStock}
           onClose={() => setSelected(null)}
           onEdit={() => { const p = selected; setSelected(null); onEdit(p); }}
           onDuplicate={() => { const p = selected; setSelected(null); onDuplicate(p); }}
